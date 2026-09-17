@@ -1,0 +1,2437 @@
+# MASTER DEVELOPMENT PROMPT
+
+## Project: Intelligent Offline Document & Book Formatting Platform
+
+Build a **production-grade, commercially sellable, fully offline desktop software application** for intelligent document analysis, structural understanding, automatic book formatting, and professional template-based publication.
+
+The application must be capable of processing **very large Microsoft Word `.docx` manuscripts, including documents of approximately 10,000 pages or more**, without crashing, freezing the UI, unnecessarily consuming all available RAM, or requiring cloud services.
+
+The software should feel like a polished commercial desktop product similar in usability, reliability, project management, reporting, and professional UX to established document-analysis software such as WCopyfind, while focusing on **intelligent manuscript understanding and publication formatting**.
+
+The system must be designed from the beginning so that it can evolve from a hackathon prototype into a real commercial product.
+
+---
+
+# 1. CORE PRODUCT VISION
+
+The application is an:
+
+> **Offline Intelligent Document Understanding and Book Formatting Platform**
+
+The user should be able to:
+
+1. Create a project.
+2. Import a `.docx` manuscript.
+3. Analyze the document.
+4. Automatically identify its logical structure.
+5. Detect chapters, headings, subheadings, body text, quotes, captions, lists, tables, images and other document elements.
+6. Select a default formatting template OR create/use a custom template.
+7. Automatically transform the manuscript according to the selected template.
+8. Handle very large manuscripts through chunked and parallel processing.
+9. Preview the result.
+10. Review uncertain AI/ML decisions.
+11. Correct decisions manually.
+12. Save those corrections locally.
+13. Reuse templates.
+14. Export a publication-ready `.docx`.
+15. Eventually support PDF and EPUB export.
+
+The core system must work **without external AI APIs, cloud processing, or internet access**.
+
+---
+
+# 2. NON-NEGOTIABLE REQUIREMENTS
+
+The following requirements are mandatory.
+
+## 2.1 Offline
+
+The document-processing pipeline must work completely offline.
+
+No dependency on:
+
+* OpenAI APIs
+* Gemini APIs
+* Claude APIs
+* Cloud LLMs
+* Cloud NLP APIs
+* Cloud document-processing APIs
+* Firebase
+* Supabase
+* AWS processing
+* Azure processing
+* Google Cloud processing
+* Any external API for manuscript analysis
+
+The manuscript must never need to leave the user's computer.
+
+---
+
+## 2.2 Large Document Support
+
+The architecture must support:
+
+* 100-page documents
+* 500-page documents
+* 1,000-page documents
+* 5,000-page documents
+* 10,000+ page documents
+
+Do not design the system around loading and processing the entire manuscript as one massive in-memory object.
+
+Use:
+
+* document indexing
+* logical chunking
+* persistent intermediate state
+* worker pools
+* multiprocessing
+* controlled memory usage
+* incremental processing
+* incremental result storage
+* crash recovery
+
+---
+
+## 2.3 UI Must Never Freeze
+
+Heavy document processing must never execute directly on the UI thread.
+
+The interface must remain responsive while processing.
+
+The user must be able to:
+
+* view progress
+* cancel jobs
+* pause jobs where possible
+* resume jobs
+* inspect errors
+* continue using non-processing parts of the application
+
+---
+
+# 3. PRODUCTION TECHNOLOGY STACK
+
+## Desktop Shell
+
+Use:
+
+### Tauri
+
+Responsibilities:
+
+* Desktop packaging
+* Native application shell
+* File-system access
+* IPC communication
+* Application lifecycle
+* OS integration
+
+Target:
+
+* Windows
+* macOS
+* Linux
+
+Prioritize Windows for the first production release.
+
+---
+
+# 4. FRONTEND STACK
+
+Use:
+
+### React
+
+### TypeScript
+
+### Vite
+
+### Tailwind CSS
+
+### Zustand
+
+### dnd-kit
+
+Frontend responsibilities:
+
+* Dashboard
+* Project manager
+* File selection
+* Document analysis UI
+* Processing dashboard
+* Template selection
+* Custom template designer
+* Preview
+* Settings
+* Error reports
+* Export UI
+
+The frontend must not perform heavy document processing.
+
+---
+
+# 5. TEMPLATE DESIGNER
+
+The application must contain a visual template editor inspired by tools such as:
+
+* Wix Studio
+* Canva
+* professional page layout software
+
+The editor should allow users to visually design reusable book/page templates.
+
+The editor must support:
+
+* drag
+* drop
+* move
+* resize
+* duplicate
+* delete
+* align
+* distribute
+* lock
+* hide
+* layer ordering
+* snapping
+* rulers
+* guides
+* zoom
+* grid
+* keyboard shortcuts
+
+---
+
+# 6. TEMPLATE EDITOR UI
+
+Use a three-panel design.
+
+```text
+┌──────────────────────────────────────────────────────────┐
+│ File  Edit  View  Template                  Save Preview │
+├──────────────┬──────────────────────────────┬────────────┤
+│ Components   │                              │ Properties │
+│              │                              │            │
+│ Text         │                              │ Position   │
+│ Heading      │          PAGE CANVAS         │ Size       │
+│ Image        │                              │ Font       │
+│ Header       │                              │ Alignment  │
+│ Footer       │                              │ Spacing    │
+│ Page Number  │                              │ Color      │
+│ Shape        │                              │            │
+│ Table        │                              │            │
+├──────────────┴──────────────────────────────┴────────────┤
+│ Page Types / Template Structure                          │
+└──────────────────────────────────────────────────────────┘
+```
+
+---
+
+# 7. TEMPLATE COMPONENTS
+
+The editor must support reusable components such as:
+
+* Text
+* Heading
+* Chapter title
+* Image
+* Table
+* Quote
+* Header
+* Footer
+* Page number
+* Shape
+* Divider
+* Caption
+* Metadata
+* Decorative elements
+
+Each component must have configurable properties.
+
+Example:
+
+```text
+Position
+X
+Y
+
+Dimensions
+Width
+Height
+
+Typography
+Font
+Size
+Weight
+Style
+Alignment
+
+Spacing
+Margin
+Padding
+Line spacing
+
+Behavior
+Lock
+Visibility
+Page type
+```
+
+---
+
+# 8. PAGE TYPES
+
+Do not allow users to manually design thousands of individual pages.
+
+Templates must operate using reusable page types.
+
+Support:
+
+* Cover
+* Title Page
+* Copyright Page
+* Dedication
+* Table of Contents
+* Chapter Opening
+* Normal Page
+* Quote Page
+* Image Page
+* Table Page
+* Appendix
+* Back Matter
+
+Example:
+
+```text
+Chapter 1 → Chapter Opening
+Chapter 2 → Chapter Opening
+Chapter 3 → Chapter Opening
+...
+Chapter 500 → Chapter Opening
+```
+
+The template should define the rule once and reuse it.
+
+---
+
+# 9. SEMANTIC TEMPLATE SYSTEM
+
+Templates must operate on semantic document elements rather than specific paragraphs.
+
+Example:
+
+```text
+CHAPTER_TITLE
+        ↓
+Chapter Layout
+
+HEADING_1
+        ↓
+Heading 1 Layout
+
+BODY
+        ↓
+Body Layout
+
+QUOTE
+        ↓
+Quote Layout
+
+IMAGE
+        ↓
+Image Layout
+
+CAPTION
+        ↓
+Caption Layout
+```
+
+This is essential for scaling to 10,000-page documents.
+
+---
+
+# 10. TEMPLATE STORAGE
+
+Templates must be data-driven.
+
+Use:
+
+### JSON + JSON Schema
+
+Templates must be:
+
+* saved
+* loaded
+* duplicated
+* renamed
+* versioned
+* exported
+* imported
+* validated
+
+Example:
+
+```json
+{
+  "name": "Classic Novel",
+  "version": "1.0",
+  "page": {
+    "width": 5.5,
+    "height": 8.5,
+    "unit": "inch"
+  },
+  "styles": {
+    "body": {
+      "font": "Garamond",
+      "size": 11,
+      "lineSpacing": 1.15
+    },
+    "chapter": {
+      "font": "Garamond",
+      "size": 24,
+      "alignment": "center"
+    }
+  }
+}
+```
+
+---
+
+# 11. DEFAULT TEMPLATES
+
+Provide built-in templates.
+
+Minimum:
+
+### Classic Novel
+
+### Modern Novel
+
+### Academic Book
+
+### Technical Book
+
+### Minimal Book
+
+Each template must define:
+
+* page dimensions
+* margins
+* fonts
+* paragraph styles
+* heading styles
+* chapter styles
+* headers
+* footers
+* page numbers
+* spacing
+* page-break behavior
+
+---
+
+# 12. DOCUMENT IMPORT
+
+The application must support:
+
+### Microsoft Word `.docx`
+
+Main upload screen:
+
+```text
+┌───────────────────────────────────┐
+│                                   │
+│        DROP DOCX FILE HERE        │
+│                                   │
+│       or                          │
+│                                   │
+│       [ Browse Files ]            │
+│                                   │
+└───────────────────────────────────┘
+```
+
+After import:
+
+```text
+Filename
+File size
+Estimated document size
+Paragraph count
+Sections
+Images
+Tables
+Estimated page count
+```
+
+---
+
+# 13. DOCUMENT ENGINE
+
+Create a dedicated Python document-processing engine.
+
+Recommended libraries:
+
+```text
+python-docx
+lxml
+```
+
+Use `python-docx` for high-level document manipulation.
+
+Use `lxml` for low-level OOXML/WordprocessingML manipulation.
+
+The engine must preserve:
+
+* text
+* styles
+* tables
+* images
+* relationships
+* sections
+* headers
+* footers
+* formatting information
+
+as far as supported by the implementation.
+
+---
+
+# 14. INTERNAL DOCUMENT MODEL
+
+Do not make `python-docx` objects the application's primary internal representation.
+
+Create a custom:
+
+### DocumentModel
+
+Structure:
+
+```text
+Document
+│
+├── Metadata
+├── Sections
+├── Chapters
+├── Blocks
+│   ├── Paragraph
+│   ├── Heading
+│   ├── Quote
+│   ├── Caption
+│   ├── List
+│   ├── Table
+│   └── Image
+├── Styles
+└── Relationships
+```
+
+Pipeline:
+
+```text
+DOCX
+ ↓
+Parser
+ ↓
+DocumentModel
+ ↓
+Analysis
+ ↓
+Formatting
+ ↓
+DocumentModel
+ ↓
+DOCX Export
+```
+
+---
+
+# 15. DOCUMENT SCANNER
+
+The first processing stage should scan the DOCX and build a lightweight structural index.
+
+Extract:
+
+* paragraphs
+* runs
+* styles
+* section boundaries
+* tables
+* images
+* numbering
+* page-break indicators
+* headings
+* document metadata
+
+Do not immediately perform expensive ML processing.
+
+---
+
+# 16. DOCUMENT INDEXER
+
+Create a persistent document index.
+
+Store metadata such as:
+
+```text
+document_id
+paragraph_id
+chapter_id
+section_id
+position
+style_id
+word_count
+character_count
+image_id
+table_id
+```
+
+The index must allow fast navigation and retrieval.
+
+Example:
+
+```text
+Find Chapter 73
+       ↓
+Document Index
+       ↓
+Directly locate Chapter 73
+```
+
+---
+
+# 17. CHUNK MANAGER
+
+Create a dedicated Chunk Manager.
+
+Chunk based on logical document boundaries where possible.
+
+Preferred hierarchy:
+
+```text
+Document
+ ↓
+Chapter
+ ↓
+Section
+ ↓
+Subsection
+ ↓
+Processing Chunk
+```
+
+Do not blindly split every N pages.
+
+Chunks must preserve enough context for correct classification.
+
+---
+
+# 18. LARGE DOCUMENT PROCESSING
+
+For 10,000 pages:
+
+```text
+10,000-page DOCX
+        ↓
+Document Scanner
+        ↓
+Document Index
+        ↓
+Logical Chunking
+        ↓
+Parallel Processing
+        ↓
+Result Aggregation
+        ↓
+DocumentModel
+        ↓
+Formatting
+        ↓
+Export
+```
+
+The system must avoid keeping unnecessary intermediate representations in memory.
+
+---
+
+# 19. CONCURRENCY MODEL
+
+Use two concurrency mechanisms.
+
+## ThreadPoolExecutor
+
+Use threads for:
+
+* file I/O
+* cache operations
+* preview generation
+* reading/writing
+* background non-CPU tasks
+
+## ProcessPoolExecutor / multiprocessing
+
+Use processes for:
+
+* CPU-heavy feature extraction
+* NLP
+* ML inference
+* expensive formatting
+* document analysis
+
+Architecture:
+
+```text
+                  JOB MANAGER
+                       │
+            ┌──────────┴──────────┐
+            │                     │
+       THREAD POOL           PROCESS POOL
+            │                     │
+        I/O Tasks          ML / NLP / CPU
+        Cache              Formatting
+        Preview            Analysis
+```
+
+Do not use threading as a substitute for CPU parallelism.
+
+---
+
+# 20. JOB MANAGER
+
+Every major operation must be represented as a job.
+
+Job states:
+
+```text
+QUEUED
+INDEXING
+CHUNKING
+ANALYZING
+VALIDATING
+FORMATTING
+ASSEMBLING
+EXPORTING
+COMPLETED
+FAILED
+CANCELLED
+```
+
+Each job should contain:
+
+```text
+job_id
+project_id
+input_file
+template_id
+status
+progress
+current_stage
+current_chunk
+total_chunks
+errors
+warnings
+output_file
+timestamps
+```
+
+---
+
+# 21. JOB CONTROL
+
+The user must be able to:
+
+* start
+* pause where supported
+* resume
+* cancel
+* retry
+* recover
+
+For large documents, failure of one chunk must not automatically force complete reprocessing.
+
+Example:
+
+```text
+Chunk 847
+    ↓
+FAILED
+    ↓
+Retry
+    ↓
+SUCCESS
+```
+
+---
+
+# 22. CRASH RECOVERY
+
+Persist processing state.
+
+Example:
+
+```text
+Completed:
+Chunks 1–847
+
+Current:
+848
+
+Remaining:
+849–1000
+```
+
+If the application crashes:
+
+```text
+Restart
+ ↓
+Load Job State
+ ↓
+Resume
+ ↓
+Continue from Chunk 848
+```
+
+Do not force the user to restart a multi-hour processing job from the beginning.
+
+---
+
+# 23. ML ENGINE
+
+Use a hybrid ML approach.
+
+Primary model:
+
+### Random Forest
+
+Purpose:
+
+Classify document elements.
+
+Classes:
+
+```text
+CHAPTER_TITLE
+HEADING_1
+HEADING_2
+HEADING_3
+BODY
+QUOTE
+CAPTION
+LIST
+TABLE
+UNKNOWN
+```
+
+The existing project proposes lightweight classical ML such as Random Forest/Decision Tree/SVM for structural classification.
+
+---
+
+# 24. FEATURE EXTRACTION
+
+Do not rely only on text.
+
+Extract:
+
+## Typography
+
+* font family
+* font size
+* bold ratio
+* italic ratio
+* underline
+
+## Layout
+
+* alignment
+* indentation
+* spacing
+* position
+* surrounding whitespace
+
+## Text
+
+* word count
+* character count
+* capitalization ratio
+* punctuation
+
+## Structure
+
+* previous element
+* next element
+* chapter position
+* section position
+
+## Pattern
+
+* numbering
+* "Chapter 1"
+* "CHAPTER ONE"
+* "1. Introduction"
+* "1.1 Background"
+* "Figure 2"
+* "Table 3"
+
+---
+
+# 25. NLP ENGINE
+
+Use:
+
+### spaCy
+
+for:
+
+* tokenization
+* sentence segmentation
+* linguistic features
+
+Use:
+
+### Regex
+
+for deterministic structural patterns.
+
+Use NLTK only where a specific feature is needed.
+
+Avoid unnecessary NLP dependencies.
+
+---
+
+# 26. OPTIONAL TRANSFORMER
+
+A small local Transformer may be used as a secondary classifier.
+
+Do NOT run it across the entire 10,000-page document by default.
+
+Use a confidence cascade:
+
+```text
+Paragraph
+    ↓
+Random Forest
+    ↓
+Confidence
+    │
+    ├── High → Accept
+    │
+    └── Low
+          ↓
+    Local Transformer
+          ↓
+     Rule Engine
+```
+
+The Transformer should be a **difficult-case resolver**.
+
+---
+
+# 27. LLM POLICY
+
+The core formatting engine must not depend on an LLM.
+
+No cloud LLM.
+
+No external LLM API.
+
+No requirement for an internet connection.
+
+An optional local LLM may be introduced in a future version for non-critical assistance such as:
+
+* metadata suggestions
+* document summaries
+* semantic assistance
+
+but formatting and structural decisions must remain functional without it.
+
+The original project specifically establishes a no-cloud/no-LLM direction.
+
+---
+
+# 28. RULE ENGINE
+
+Create a deterministic Rule Engine.
+
+Its responsibility is to validate and correct ML predictions.
+
+Examples:
+
+```text
+Heading 3 cannot appear before Heading 2.
+
+Chapter title should normally begin a chapter.
+
+Heading should not be left isolated at the bottom of a page.
+
+Caption should remain associated with its image.
+
+Quote should remain visually grouped.
+
+Table caption should remain associated with its table.
+
+Chapter opening should follow the template's chapter-opening rules.
+```
+
+Pipeline:
+
+```text
+ML
+ +
+NLP
+ +
+Document Context
+ ↓
+Rule Engine
+ ↓
+Validated Structure
+```
+
+---
+
+# 29. DOCUMENT STRUCTURE GRAPH
+
+Build a semantic document hierarchy.
+
+Example:
+
+```text
+BOOK
+│
+├── Chapter 1
+│   ├── Section 1.1
+│   │   ├── Paragraph
+│   │   ├── Paragraph
+│   │   └── Quote
+│   │
+│   └── Section 1.2
+│       └── Paragraph
+│
+├── Chapter 2
+│   └── ...
+```
+
+This structure becomes the bridge between analysis and formatting.
+
+---
+
+# 30. HUMAN-IN-THE-LOOP REVIEW
+
+The system must expose uncertain decisions.
+
+Example:
+
+```text
+Chapter 1
+Confidence: 99%
+✓ Accepted
+
+Heading 2
+Confidence: 96%
+✓ Accepted
+
+Caption
+Confidence: 63%
+⚠ Review
+
+Unknown
+Confidence: 52%
+⚠ Review
+```
+
+Provide a review interface where the user can change:
+
+```text
+Body → Heading
+Heading → Body
+Caption → Image Caption
+Quote → Body
+```
+
+---
+
+# 31. LOCAL ADAPTIVE LEARNING
+
+Store user corrections locally.
+
+Example:
+
+```text
+ML Prediction
+      ↓
+User Correction
+      ↓
+Local Correction Dataset
+      ↓
+Optional Retraining
+      ↓
+Improved Model
+```
+
+No manuscript needs to be uploaded to a server.
+
+The system should allow the user to optionally retrain or update the local model.
+
+---
+
+# 32. SMART LAYOUT ENGINE
+
+Create a dedicated Layout Engine.
+
+Responsibilities:
+
+* pagination
+* page breaks
+* section breaks
+* margins
+* headers
+* footers
+* page numbers
+* heading placement
+* image placement
+* caption placement
+* orphan handling
+* widow handling
+* spacing
+* chapter opening
+
+Example:
+
+```text
+Heading
++
+one line of text
+        ↓
+Orphan detected
+        ↓
+Move heading to next page
+```
+
+---
+
+# 33. FORMATTING ENGINE
+
+The Formatting Engine applies the selected template to the validated DocumentModel.
+
+Input:
+
+```text
+Validated DocumentModel
++
+Template
+```
+
+Output:
+
+```text
+Formatted DocumentModel
+```
+
+It should apply:
+
+* fonts
+* font sizes
+* colors
+* spacing
+* paragraph styles
+* heading styles
+* indentation
+* margins
+* page size
+* headers
+* footers
+* page numbering
+* chapter layouts
+* image styles
+* captions
+* TOC structure
+
+---
+
+# 34. PREVIEW ENGINE
+
+The application must provide a visual preview.
+
+For very large documents:
+
+DO NOT render all 10,000 pages simultaneously.
+
+Use virtualization.
+
+Render:
+
+```text
+Previous page
+Current page
+Next page
+```
+
+or another small visible window.
+
+Support:
+
+* zoom
+* page navigation
+* thumbnails
+* search
+* jump to chapter
+* jump to page
+* fit width
+* fit page
+
+---
+
+# 35. LARGE DOCUMENT PREVIEW
+
+For 10,000 pages, use lazy rendering.
+
+```text
+User selects Page 7,532
+        ↓
+Document Index
+        ↓
+Locate page/chunk
+        ↓
+Load required data
+        ↓
+Render only visible page
+```
+
+Do not load all page previews into RAM.
+
+---
+
+# 36. SEARCH
+
+Provide fast local search.
+
+Search across:
+
+* entire document
+* chapters
+* headings
+* paragraphs
+* captions
+* tables
+
+Results:
+
+```text
+Search: "machine learning"
+
+23 matches
+
+Chapter 4 — Page 328
+Chapter 7 — Page 614
+Chapter 11 — Page 982
+...
+```
+
+Use the local document index to accelerate search.
+
+---
+
+# 37. PROJECT MANAGEMENT
+
+The application should be project-based.
+
+Dashboard:
+
+```text
+MY PROJECTS
+
+My Novel
+10,248 pages
+Last modified: Today
+
+Research Book
+832 pages
+Last modified: Yesterday
+
+Technical Manual
+2,341 pages
+Last modified: Monday
+```
+
+Actions:
+
+* New Project
+* Open Project
+* Duplicate
+* Rename
+* Archive
+* Delete
+* Export
+* Backup
+
+---
+
+# 38. PROJECT STORAGE
+
+Use:
+
+### SQLite
+
+for:
+
+* project metadata
+* document index
+* structure information
+* templates
+* corrections
+* jobs
+* settings
+
+Use filesystem storage for:
+
+* DOCX
+* images
+* chunks
+* cache
+* previews
+* exports
+
+Do not store the complete manuscript as one huge database blob.
+
+---
+
+# 39. PROJECT DIRECTORY
+
+Example:
+
+```text
+MyBook/
+│
+├── source/
+│   └── manuscript.docx
+│
+├── database/
+│   └── project.db
+│
+├── chunks/
+│
+├── analysis/
+│
+├── cache/
+│
+├── previews/
+│
+├── templates/
+│   └── template.json
+│
+└── output/
+    └── formatted-book.docx
+```
+
+---
+
+# 40. QUALITY VALIDATION
+
+Before export, run document integrity checks.
+
+Check:
+
+* paragraph count
+* chapter count
+* heading count
+* image count
+* table count
+* sections
+* relationships
+* missing content
+* broken references
+* invalid structure
+* formatting errors
+
+Example:
+
+```text
+DOCUMENT VALIDATION
+
+Paragraphs        ✓
+Images            ✓
+Tables            ✓
+Chapters          ✓
+Relationships     ✓
+Missing content   0
+Warnings          3
+
+[ Continue Export ]
+```
+
+---
+
+# 41. OUTPUT
+
+Primary output:
+
+### `.docx`
+
+The exported document must remain editable in Microsoft Word.
+
+Future output:
+
+```text
+PDF
+EPUB
+```
+
+The existing project establishes DOCX as the primary Word-compatible output.
+
+---
+
+# 42. EXPORT WORKFLOW
+
+```text
+Validated DocumentModel
+        ↓
+Formatting Engine
+        ↓
+Layout Engine
+        ↓
+Validation
+        ↓
+DOCX Writer
+        ↓
+Final DOCX
+```
+
+The export process must not silently discard content.
+
+---
+
+# 43. ERROR HANDLING
+
+Errors must be user-friendly.
+
+Do not show raw Python stack traces to normal users.
+
+Instead:
+
+```text
+Unable to process Chapter 47.
+
+Reason:
+Unsupported embedded object.
+
+Action:
+[ Retry ]
+[ Skip Object ]
+[ Continue ]
+```
+
+Provide a detailed developer log separately.
+
+---
+
+# 44. LOGGING
+
+Create structured local logs.
+
+Log:
+
+* job ID
+* document
+* stage
+* chunk
+* processing time
+* worker
+* error
+* warning
+* recovery action
+
+Example:
+
+```text
+JOB-0021
+Chunk 847
+ML Analysis
+Duration: 2.4 sec
+Status: SUCCESS
+```
+
+---
+
+# 45. PERFORMANCE MONITORING
+
+During large processing display:
+
+```text
+10,000 PAGE DOCUMENT
+
+Progress:
+████████████████░░░░ 82%
+
+Chunks:
+820 / 1000
+
+CPU:
+78%
+
+Workers:
+8
+
+RAM:
+4.8 GB
+
+Current:
+Formatting Chapter 82
+```
+
+Do not expose unnecessarily technical information in the default UI; provide an advanced diagnostics panel.
+
+---
+
+# 46. MEMORY MANAGEMENT
+
+The system must:
+
+* avoid unnecessary full-document duplication
+* process chunks incrementally
+* release completed chunk memory
+* limit worker count based on available CPU/RAM
+* cache only useful data
+* avoid loading all previews simultaneously
+
+Worker count should be configurable or automatically determined.
+
+Example:
+
+```text
+Available CPU: 8 cores
+
+Default workers:
+6
+```
+
+Do not automatically consume every available CPU core if that makes the computer unusable.
+
+---
+
+# 47. PERFORMANCE TARGETS
+
+The system should be tested against:
+
+```text
+100 pages
+500 pages
+1,000 pages
+5,000 pages
+10,000 pages
+```
+
+Measure:
+
+* processing time
+* peak RAM
+* CPU usage
+* output size
+* failure rate
+* recovery time
+* classification accuracy
+* export success
+* content preservation
+
+Do not claim a fixed processing time until measured on actual hardware.
+
+---
+
+# 48. TEST DOCUMENT GENERATOR
+
+Create a local testing utility capable of generating synthetic large documents.
+
+Generate:
+
+```text
+100 pages
+500 pages
+1,000 pages
+5,000 pages
+10,000 pages
+```
+
+Include:
+
+* chapters
+* headings
+* body text
+* quotes
+* images
+* tables
+* captions
+* lists
+* page breaks
+* mixed styles
+
+This is required to validate scalability.
+
+---
+
+# 49. DEFAULT USER WORKFLOW
+
+The primary user journey should be:
+
+```text
+Open Application
+      ↓
+Create Project
+      ↓
+Upload DOCX
+      ↓
+Analyze Document
+      ↓
+Review Structure
+      ↓
+Choose Template
+      ↓
+Format Book
+      ↓
+Preview
+      ↓
+Review Warnings
+      ↓
+Export
+      ↓
+Publication-Ready DOCX
+```
+
+---
+
+# 50. CUSTOM TEMPLATE WORKFLOW
+
+```text
+Create Project
+      ↓
+Template Studio
+      ↓
+Create Template
+      ↓
+Choose Page Type
+      ↓
+Drag Components
+      ↓
+Resize / Position
+      ↓
+Configure Styles
+      ↓
+Save Template
+      ↓
+Preview Template
+      ↓
+Apply to Document
+```
+
+---
+
+# 51. FIRST-RUN EXPERIENCE
+
+On first launch:
+
+```text
+Welcome
+
+Create your first project.
+
+[ Create Project ]
+[ Open Existing Project ]
+```
+
+Do not overwhelm users with technical terminology.
+
+---
+
+# 52. MAIN DASHBOARD
+
+The dashboard should show:
+
+```text
+┌───────────────────────────────────────────┐
+│ Intelligent Book Formatter               │
+│                                           │
+│ [ New Project ] [ Open Project ]          │
+│                                           │
+│ Recent Projects                           │
+│                                           │
+│ My Novel          10,248 pages            │
+│ Research Book       832 pages             │
+│ Technical Manual  2,341 pages             │
+│                                           │
+│ Templates                                  │
+│ Classic | Modern | Academic | Custom      │
+└───────────────────────────────────────────┘
+```
+
+---
+
+# 53. DOCUMENT ANALYSIS SCREEN
+
+Show:
+
+```text
+Document Analysis
+
+Pages / Size
+Paragraphs
+Chapters
+Sections
+Images
+Tables
+
+Detected Structure
+
+Chapters       42
+Headings       438
+Quotes        126
+Captions      218
+Unknown        17
+
+[ Review Uncertain Items ]
+```
+
+---
+
+# 54. TEMPLATE SELECTION SCREEN
+
+Show template cards:
+
+```text
+Classic Novel
+─────────────
+Serif typography
+Traditional layout
+
+[ Use Template ]
+```
+
+```text
+Modern Novel
+─────────────
+Clean typography
+Contemporary layout
+
+[ Use Template ]
+```
+
+```text
+My Custom Template
+──────────────────
+Created by you
+
+[ Edit ] [ Use ]
+```
+
+---
+
+# 55. PROCESSING SCREEN
+
+The processing screen must show meaningful stages:
+
+```text
+Processing Book
+
+✓ Reading document
+✓ Building index
+✓ Detecting structure
+✓ ML classification
+✓ Rule validation
+✓ Applying template
+→ Smart layout
+○ Final validation
+○ Export
+
+Progress: 74%
+```
+
+---
+
+# 56. REVIEW SCREEN
+
+Provide an intelligent review queue:
+
+```text
+REVIEW REQUIRED
+
+7 uncertain elements
+
+1. Possible Caption
+   Confidence: 61%
+
+   [ Caption ] [ Body ] [ Ignore ]
+
+2. Possible Heading
+   Confidence: 68%
+
+   [ Heading ] [ Body ] [ Ignore ]
+```
+
+---
+
+# 57. TEMPLATE LIBRARY
+
+The template library should support:
+
+```text
+Built-in
+My Templates
+Imported
+Recently Used
+Favorites
+```
+
+Template operations:
+
+* create
+* edit
+* duplicate
+* rename
+* delete
+* export
+* import
+* version
+
+---
+
+# 58. BACKUP
+
+Projects should support local backups.
+
+Provide:
+
+```text
+[ Create Backup ]
+[ Restore Backup ]
+```
+
+Backups should include:
+
+* project database
+* template
+* analysis
+* relevant source references
+* configuration
+
+Large source documents should be handled carefully to avoid unnecessary duplicate storage.
+
+---
+
+# 59. SECURITY
+
+The application must:
+
+* process documents locally
+* avoid sending manuscript content externally
+* avoid cloud storage by default
+* protect project files according to OS permissions
+* avoid logging manuscript text unnecessarily
+
+Logs should store metadata/errors rather than entire confidential paragraphs.
+
+---
+
+# 60. COMMERCIAL SOFTWARE FEATURES
+
+The production application should include:
+
+* licensing
+* application settings
+* update mechanism
+* crash reporting with user consent
+* diagnostic export
+* backup/recovery
+* versioned templates
+* project management
+* user preferences
+
+The core document processing must remain independent of online services.
+
+---
+
+# 61. LICENSING
+
+Implement a License Manager.
+
+Possible editions:
+
+### Free
+
+* basic templates
+* limited document size
+* basic formatting
+
+### Professional
+
+* custom templates
+* advanced formatting
+* large document support
+* advanced review
+
+### Publisher
+
+* 10,000+ page support
+* batch processing
+* advanced template management
+* organization features
+
+The exact pricing is outside the engineering scope.
+
+---
+
+# 62. OPTIONAL ONLINE COMPONENTS
+
+Online services, if added later, must be independent of document processing.
+
+Possible services:
+
+```text
+License activation
+Software updates
+Template marketplace
+Optional telemetry
+```
+
+The application must remain capable of processing manuscripts without those services.
+
+---
+
+# 63. APPLICATION LAYERS
+
+Implement clear separation:
+
+```text
+UI Layer
+     ↓
+Application Layer
+     ↓
+Job Manager
+     ↓
+Processing Services
+     ↓
+Document Engine
+     ↓
+ML/NLP/Rules
+     ↓
+Formatting/Layout
+     ↓
+Export
+```
+
+Do not create a monolithic Python file.
+
+---
+
+# 64. RECOMMENDED CODE STRUCTURE
+
+```text
+app/
+│
+├── frontend/
+│   ├── components/
+│   ├── pages/
+│   ├── editor/
+│   ├── preview/
+│   ├── store/
+│   └── services/
+│
+├── desktop/
+│   └── tauri/
+│
+├── backend/
+│   ├── document/
+│   │   ├── reader.py
+│   │   ├── parser.py
+│   │   ├── indexer.py
+│   │   ├── chunk_manager.py
+│   │   └── model.py
+│   │
+│   ├── ml/
+│   │   ├── features.py
+│   │   ├── classifier.py
+│   │   ├── trainer.py
+│   │   └── transformer.py
+│   │
+│   ├── nlp/
+│   │   ├── tokenizer.py
+│   │   └── structural_features.py
+│   │
+│   ├── rules/
+│   │   ├── validator.py
+│   │   ├── heading_rules.py
+│   │   ├── chapter_rules.py
+│   │   └── layout_rules.py
+│   │
+│   ├── templates/
+│   │   ├── manager.py
+│   │   ├── schema.py
+│   │   └── defaults/
+│   │
+│   ├── formatting/
+│   │   ├── engine.py
+│   │   ├── styles.py
+│   │   └── layout.py
+│   │
+│   ├── jobs/
+│   │   ├── manager.py
+│   │   ├── workers.py
+│   │   └── recovery.py
+│   │
+│   ├── export/
+│   │   ├── docx.py
+│   │   ├── pdf.py
+│   │   └── epub.py
+│   │
+│   └── storage/
+│       ├── database.py
+│       └── projects.py
+│
+└── tests/
+    ├── document/
+    ├── ml/
+    ├── templates/
+    ├── formatting/
+    ├── large_documents/
+    └── integration/
+```
+
+---
+
+# 65. ARCHITECTURAL RULE
+
+The most important engineering rule is:
+
+> **The processing core must be independent of the UI.**
+
+The following should be usable independently:
+
+```text
+DocumentEngine
+MLPipeline
+RuleEngine
+TemplateEngine
+LayoutEngine
+ExportEngine
+JobManager
+```
+
+This allows the UI to evolve without rewriting the core.
+
+---
+
+# 66. FINAL PRODUCTION STACK
+
+```text
+DESKTOP
+Tauri
+
+FRONTEND
+React
+TypeScript
+Vite
+Tailwind CSS
+Zustand
+dnd-kit
+
+CORE
+Python 3.11+
+
+DOCX
+python-docx
+lxml
+
+ML
+scikit-learn
+Random Forest
+
+NLP
+spaCy
+Regex
+
+OPTIONAL AI
+Small local Transformer
+
+RULES
+Custom deterministic Rule Engine
+
+DOCUMENT MODEL
+Custom Python DocumentModel
+
+DATABASE
+SQLite
+
+STORAGE
+Local filesystem
+
+CONCURRENCY
+ThreadPoolExecutor
+ProcessPoolExecutor
+multiprocessing
+
+TEMPLATES
+JSON
+JSON Schema
+
+PREVIEW
+Virtualized React renderer
+
+EXPORT
+DOCX
+Future PDF / EPUB
+
+PACKAGING
+Tauri
+PyInstaller
+
+CLOUD AI
+NONE
+
+EXTERNAL AI APIs
+NONE
+
+MANDATORY INTERNET
+NONE
+```
+
+---
+
+# 67. END-TO-END SYSTEM WORKFLOW
+
+```text
+                         USER
+                           │
+                           ▼
+                   CREATE PROJECT
+                           │
+                           ▼
+                      UPLOAD DOCX
+                           │
+                           ▼
+                  DOCUMENT SCANNER
+                           │
+                           ▼
+                   DOCUMENT INDEXER
+                           │
+                           ▼
+                     CHUNK MANAGER
+                           │
+                           ▼
+                      JOB MANAGER
+                           │
+                ┌──────────┴──────────┐
+                │                     │
+           THREAD POOL           PROCESS POOL
+                │                     │
+             I/O Tasks          ML / NLP / CPU
+                                      │
+                                      ▼
+                              FEATURE EXTRACTION
+                                      │
+                                      ▼
+                                RANDOM FOREST
+                                      │
+                                      ▼
+                              CONFIDENCE CHECK
+                                /           \
+                           HIGH             LOW
+                            │                │
+                         ACCEPT       LOCAL TRANSFORMER
+                            │                │
+                            └───────┬────────┘
+                                    ▼
+                               RULE ENGINE
+                                    │
+                                    ▼
+                         DOCUMENT STRUCTURE GRAPH
+                                    │
+                                    ▼
+                             TEMPLATE ENGINE
+                              /           \
+                         DEFAULT          CUSTOM
+                                         TEMPLATE
+                                           │
+                                    VISUAL DESIGNER
+                                           │
+                                    TEMPLATE SCHEMA
+                                           │
+                                    └───────┬───────
+                                            ▼
+                                  SMART LAYOUT ENGINE
+                                            │
+                                            ▼
+                                      QUALITY CHECK
+                                            │
+                                            ▼
+                                         PREVIEW
+                                            │
+                                            ▼
+                                      DOCX EXPORT
+                                            │
+                                            ▼
+                                  FINAL BOOK DOCUMENT
+```
+
+---
+
+# 68. DEVELOPMENT PHASES
+
+## Phase 1 — Document Core
+
+Implement:
+
+* DOCX reading
+* parsing
+* internal DocumentModel
+* basic export
+
+---
+
+## Phase 2 — Large Document Infrastructure
+
+Implement:
+
+* document indexing
+* logical chunking
+* SQLite storage
+* Job Manager
+* multiprocessing
+* threading
+* checkpointing
+* recovery
+
+Test with 100–10,000 pages.
+
+---
+
+## Phase 3 — Intelligence
+
+Implement:
+
+* feature extraction
+* Random Forest
+* NLP
+* confidence scores
+* Rule Engine
+* Document Structure Graph
+
+---
+
+## Phase 4 — Formatting
+
+Implement:
+
+* style engine
+* template engine
+* semantic formatting
+* page rules
+* headers
+* footers
+* page numbers
+* TOC
+
+---
+
+## Phase 5 — Default Templates
+
+Implement:
+
+* Classic
+* Modern
+* Academic
+* Technical
+* Minimal
+
+---
+
+## Phase 6 — Smart Layout
+
+Implement:
+
+* pagination
+* orphan handling
+* widow handling
+* image/caption relationships
+* heading placement
+* section breaks
+
+---
+
+## Phase 7 — Visual Template Designer
+
+Implement:
+
+* drag/drop
+* resize
+* alignment
+* snapping
+* layers
+* properties
+* reusable page types
+* template JSON serialization
+
+---
+
+## Phase 8 — Preview
+
+Implement:
+
+* page preview
+* thumbnails
+* zoom
+* search
+* chapter navigation
+* virtualized rendering
+
+---
+
+## Phase 9 — Human Review
+
+Implement:
+
+* confidence queue
+* manual corrections
+* local correction dataset
+* optional retraining
+
+---
+
+## Phase 10 — Commercialization
+
+Implement:
+
+* licensing
+* backups
+* updates
+* diagnostics
+* installer
+* crash recovery
+* product analytics where privacy permits
+
+---
+
+# 69. ACCEPTANCE CRITERIA
+
+The application should not be considered production-ready until:
+
+### Document Processing
+
+* DOCX can be imported successfully.
+* Text is preserved.
+* Images are preserved.
+* Tables are preserved.
+* Structure is detected.
+* Output DOCX opens successfully.
+
+### Large Documents
+
+* 1,000-page document can be processed.
+* 5,000-page document can be processed.
+* 10,000-page test document can be processed.
+* UI remains responsive.
+* Memory usage is controlled.
+* Processing can recover after interruption.
+
+### Intelligence
+
+* Chapters are detected.
+* Headings are detected.
+* Body text is detected.
+* Quotes are detected.
+* Captions are detected.
+* Lists are detected.
+* Confidence scores are generated.
+* Rules can override incorrect ML predictions.
+
+### Templates
+
+* Default templates work.
+* Custom templates can be created.
+* Templates can be saved.
+* Templates can be reused.
+* Templates can be imported/exported.
+
+### Visual Editor
+
+* Elements can be dragged.
+* Elements can be resized.
+* Properties can be edited.
+* Page types can be created.
+* Templates can be previewed.
+
+### Commercial Reliability
+
+* Errors are recoverable.
+* Jobs can be resumed.
+* Projects can be backed up.
+* Logs are available.
+* No manuscript content is sent externally.
+
+---
+
+# 70. FINAL PRODUCT PRINCIPLE
+
+Do not build this as:
+
+```text
+Upload DOCX
+      ↓
+ML
+      ↓
+Change Fonts
+      ↓
+Download
+```
+
+Build it as:
+
+```text
+                DOCUMENT
+                    ↓
+              UNDERSTANDING
+                    ↓
+             ML + NLP + RULES
+                    ↓
+          STRUCTURAL DOCUMENT MODEL
+                    ↓
+             SEMANTIC TEMPLATE
+                    ↓
+           SMART LAYOUT ENGINE
+                    ↓
+              QUALITY CHECK
+                    ↓
+                  PREVIEW
+                    ↓
+                 EXPORT
+```
+
+The application's key differentiators should be:
+
+1. **10,000+ page scalability**
+2. **Fully local/private processing**
+3. **Document Structure Graph**
+4. **Hybrid ML + NLP + deterministic rules**
+5. **Visual drag-and-drop Template Studio**
+6. **Semantic reusable page types**
+7. **Smart layout and pagination**
+8. **Human-in-the-loop review**
+9. **Local adaptive learning**
+10. **Checkpointing and crash recovery**
+11. **Professional project management**
+12. **Commercial-grade UX and reliability**
+
+The ML model itself should remain replaceable.
+
+The real intellectual property should be the combination of:
+
+```text
+Document Engine
++
+Large Document Architecture
++
+Structure Understanding
++
+Rule Engine
++
+Template System
++
+Layout Engine
++
+Visual Designer
+```
+
+That architecture should be treated as the foundation of the commercial product.

@@ -1,0 +1,351 @@
+{
+  "profile_name": "Book Publisher",
+  "profile_version": "1.0",
+
+  "document_type": "book",
+
+  "page": {
+    "size": "A5",
+    "orientation": "portrait",
+    "margins": {
+      "inside": 0.85,
+      "outside": 0.7,
+      "top": 0.75,
+      "bottom": 0.75,
+      "unit": "inch"
+    },
+    "mirror_margins": true
+  },
+
+  "layout": {
+    "columns": 1,
+    "gutter": 0.15,
+    "widow_control": true,
+    "orphan_control": true
+  },
+
+  "default_font": {
+    "name": "Times New Roman",
+    "size": 11
+  },
+
+  "front_matter": {
+
+    "half_title": {
+      "enabled": true,
+      "alignment": "center",
+      "vertical_alignment": "center"
+    },
+
+    "title_page": {
+      "enabled": true,
+      "title": {
+        "font": "Times New Roman",
+        "size": 22,
+        "bold": true,
+        "alignment": "center"
+      },
+      "subtitle": {
+        "font": "Times New Roman",
+        "size": 14,
+        "italic": false,
+        "alignment": "center"
+      },
+      "author": {
+        "font": "Times New Roman",
+        "size": 12,
+        "alignment": "center"
+      },
+      "publisher": {
+        "font": "Times New Roman",
+        "size": 10,
+        "alignment": "center"
+      }
+    },
+
+    "copyright_page": {
+      "enabled": true,
+      "font": "Times New Roman",
+      "size": 9,
+      "alignment": "left"
+    },
+
+    "dedication": {
+      "enabled": true,
+      "font": "Times New Roman",
+      "size": 11,
+      "italic": true,
+      "alignment": "center"
+    },
+
+    "epigraph": {
+      "enabled": true,
+      "font": "Times New Roman",
+      "size": 10,
+      "italic": true,
+      "alignment": "center"
+    },
+
+    "table_of_contents": {
+      "enabled": true,
+      "title": {
+        "font": "Times New Roman",
+        "size": 16,
+        "bold": true,
+        "alignment": "center"
+      },
+      "entry_font": "Times New Roman",
+      "entry_size": 10,
+      "show_page_numbers": true,
+      "dot_leader": true
+    },
+
+    "preface": {
+      "enabled": true,
+      "heading_style": "HEADING_1"
+    },
+
+    "acknowledgements": {
+      "enabled": true,
+      "heading_style": "HEADING_1"
+    }
+  },
+
+  "chapter": {
+
+    "chapter_opener": {
+      "page_break_before": true,
+      "start_on": "odd_page"
+    },
+
+    "chapter_number": {
+      "font": "Times New Roman",
+      "size": 14,
+      "bold": true,
+      "alignment": "center"
+    },
+
+    "chapter_title": {
+      "font": "Times New Roman",
+      "size": 20,
+      "bold": true,
+      "alignment": "center",
+      "space_before": 12,
+      "space_after": 24
+    },
+
+    "chapter_subtitle": {
+      "font": "Times New Roman",
+      "size": 12,
+      "italic": true,
+      "alignment": "center"
+    }
+  },
+
+  "elements": {
+
+    "TITLE": {
+      "font": "Times New Roman",
+      "size": 20,
+      "bold": true,
+      "alignment": "center"
+    },
+
+    "AUTHOR": {
+      "font": "Times New Roman",
+      "size": 11,
+      "alignment": "center"
+    },
+
+    "ABSTRACT": {
+      "font": "Times New Roman",
+      "size": 10,
+      "alignment": "justify",
+      "line_spacing": 1.15
+    },
+
+    "HEADING_1": {
+      "font": "Times New Roman",
+      "size": 16,
+      "bold": true,
+      "alignment": "left",
+      "space_before": 18,
+      "space_after": 8,
+      "page_break_before": false
+    },
+
+    "HEADING_2": {
+      "font": "Times New Roman",
+      "size": 13,
+      "bold": true,
+      "alignment": "left",
+      "space_before": 14,
+      "space_after": 6
+    },
+
+    "HEADING_3": {
+      "font": "Times New Roman",
+      "size": 11,
+      "bold": true,
+      "alignment": "left",
+      "space_before": 10,
+      "space_after": 4
+    },
+
+    "BODY": {
+      "font": "Times New Roman",
+      "size": 11,
+      "alignment": "justify",
+      "line_spacing": 1.15,
+      "first_line_indent": 0.2,
+      "space_before": 0,
+      "space_after": 6
+    },
+
+    "BODY_FIRST_PARAGRAPH": {
+      "font": "Times New Roman",
+      "size": 11,
+      "alignment": "justify",
+      "first_line_indent": 0,
+      "space_after": 6
+    },
+
+    "QUOTE": {
+      "font": "Times New Roman",
+      "size": 10,
+      "italic": true,
+      "alignment": "justify",
+      "left_indent": 0.3,
+      "right_indent": 0.3,
+      "space_before": 6,
+      "space_after": 6
+    },
+
+    "LIST": {
+      "font": "Times New Roman",
+      "size": 11,
+      "alignment": "left",
+      "left_indent": 0.25,
+      "hanging_indent": 0.15,
+      "space_after": 3
+    },
+
+    "FIGURE": {
+      "alignment": "center",
+      "keep_with_next": true
+    },
+
+    "CAPTION": {
+      "font": "Times New Roman",
+      "size": 9,
+      "alignment": "center",
+      "space_before": 4,
+      "space_after": 8
+    },
+
+    "TABLE": {
+      "font": "Times New Roman",
+      "size": 9,
+      "alignment": "center"
+    },
+
+    "TABLE_CAPTION": {
+      "font": "Times New Roman",
+      "size": 9,
+      "bold": true,
+      "alignment": "center",
+      "space_after": 4
+    },
+
+    "REFERENCE": {
+      "font": "Times New Roman",
+      "size": 9,
+      "alignment": "left",
+      "hanging_indent": 0.25,
+      "space_after": 4
+    },
+
+    "APPENDIX": {
+      "font": "Times New Roman",
+      "size": 16,
+      "bold": true,
+      "alignment": "center"
+    }
+  },
+
+  "paragraph_rules": {
+    "widow_control": true,
+    "keep_heading_with_next": true,
+    "avoid_single_line_paragraph": true,
+    "avoid_heading_at_bottom": true
+  },
+
+  "headers": {
+    "enabled": true,
+    "font": "Times New Roman",
+    "size": 8,
+    "different_first_page": true,
+    "different_odd_even": true,
+    "odd_page": "chapter_title",
+    "even_page": "book_title"
+  },
+
+  "footers": {
+    "enabled": true,
+    "font": "Times New Roman",
+    "size": 8,
+    "page_number": {
+      "enabled": true,
+      "position": "center"
+    }
+  },
+
+  "page_numbering": {
+    "front_matter": {
+      "style": "roman_lowercase"
+    },
+    "main_matter": {
+      "style": "arabic",
+      "start_at": 1
+    }
+  },
+
+  "references": {
+    "enabled": true,
+    "numbering": false
+  },
+
+  "appendices": {
+    "enabled": true,
+    "numbering": "alphabetic"
+  },
+
+  "validation": {
+    "required_elements": [
+      "TITLE",
+      "BODY"
+    ],
+    "allowed_elements": [
+      "TITLE",
+      "AUTHOR",
+      "ABSTRACT",
+      "HEADING_1",
+      "HEADING_2",
+      "HEADING_3",
+      "BODY",
+      "QUOTE",
+      "LIST",
+      "FIGURE",
+      "CAPTION",
+      "TABLE",
+      "REFERENCE",
+      "APPENDIX"
+    ],
+    "check_page_size": true,
+    "check_margins": true,
+    "check_fonts": true,
+    "check_heading_hierarchy": true,
+    "check_page_numbers": true,
+    "check_missing_elements": true
+  }
+}
