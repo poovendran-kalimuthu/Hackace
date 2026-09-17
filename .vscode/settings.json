@@ -1,0 +1,12 @@
+{
+  "python.defaultInterpreterPath": "C:\\Users\\WELCOME\\AppData\\Local\\Programs\\Python\\Python311\\python.exe",
+  "python.analysis.extraPaths": [
+    "${workspaceFolder}",
+    "${workspaceFolder}/docucraft"
+  ],
+  "python.autoComplete.extraPaths": [
+    "${workspaceFolder}",
+    "${workspaceFolder}/docucraft"
+  ],
+  "python.analysis.autoSearchPaths": true
+}
