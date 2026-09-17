@@ -346,6 +346,37 @@ class BookTemplate(BaseModel):
                     span_columns=bool(el_spec.get("span_columns", False)),
                 )
 
+        if key_lower in ("chapter_title", "part_title"):
+            return ElementStyle(
+                font_family="Times New Roman",
+                font_size_pt=20.0,
+                bold=True,
+                alignment="CENTER",
+                space_before_pt=18.0,
+                space_after_pt=24.0,
+                page_break_before=True,
+            )
+
+        if key_lower == "title":
+            return ElementStyle(
+                font_family="Times New Roman",
+                font_size_pt=22.0,
+                bold=True,
+                alignment="CENTER",
+                space_before_pt=24.0,
+                space_after_pt=18.0,
+            )
+
+        if key_lower in ("heading_1", "heading_2", "heading_3", "subheading"):
+            return ElementStyle(
+                font_family="Times New Roman",
+                font_size_pt=14.0 if "1" in key_lower else 12.0,
+                bold=True,
+                alignment="LEFT",
+                space_before_pt=12.0,
+                space_after_pt=6.0,
+            )
+
         if "body" in self.styles:
             return self.styles["body"]
 

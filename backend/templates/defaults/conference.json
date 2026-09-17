@@ -1,163 +1,149 @@
 {
+  "id": "conference",
   "profile_name": "Conference Paper",
   "profile_version": "1.0",
-
   "document_type": "conference_paper",
 
   "page": {
-    "size": "A4",
-    "orientation": "portrait",
+    "size": "",
+    "orientation": "",
     "margins": {
-      "top": 0.7,
-      "bottom": 0.7,
-      "left": 0.7,
-      "right": 0.7,
-      "unit": "inch"
+      "top": 0,
+      "bottom": 0,
+      "left": 0,
+      "right": 0,
+      "unit": "cm"
+    },
+    "gutter": {
+      "position": ""
     }
   },
 
   "layout": {
-    "columns": 2,
-    "column_gap": 0.25,
-    "unit": "inch",
-    "widow_control": true,
-    "orphan_control": true
+    "columns": 0,
+    "column_gap": 0,
+    "gap_unit": "cm"
+  },
+
+  "default_text": {
+    "font": "",
+    "font_size": 0,
+    "font_size_unit": "pt",
+    "color": "",
+    "alignment": "",
+    "line_spacing": 0,
+    "first_line_indent": 0,
+    "indent_unit": "cm"
   },
 
   "elements": {
 
     "TITLE": {
-      "font": "Times New Roman",
-      "size": 18,
-      "bold": true,
-      "alignment": "center",
-      "span_columns": true,
-      "space_after": 10
+      "font": "",
+      "font_size": 0,
+      "font_size_unit": "pt",
+      "bold": false,
+      "alignment": ""
     },
 
     "AUTHOR": {
-      "font": "Times New Roman",
-      "size": 10,
-      "alignment": "center",
-      "span_columns": true
+      "font": "",
+      "font_size": 0,
+      "font_size_unit": "pt",
+      "alignment": ""
     },
 
     "AFFILIATION": {
-      "font": "Times New Roman",
-      "size": 9,
-      "italic": true,
-      "alignment": "center",
-      "span_columns": true
+      "font": "",
+      "font_size": 0,
+      "font_size_unit": "pt",
+      "alignment": ""
     },
 
     "ABSTRACT": {
-      "font": "Times New Roman",
-      "size": 9,
-      "alignment": "justify",
-      "span_columns": true,
-      "line_spacing": 1.0
+      "font": "",
+      "font_size": 0,
+      "font_size_unit": "pt",
+      "alignment": "",
+      "line_spacing": 0
     },
 
     "KEYWORDS": {
-      "font": "Times New Roman",
-      "size": 9,
-      "italic": true,
-      "span_columns": true
+      "font": "",
+      "font_size": 0,
+      "font_size_unit": "pt",
+      "italic": false,
+      "alignment": ""
     },
 
     "HEADING_1": {
-      "font": "Times New Roman",
-      "size": 10,
-      "bold": true,
-      "uppercase": true,
-      "alignment": "left",
-      "space_before": 8,
-      "space_after": 4
+      "font": "",
+      "font_size": 0,
+      "font_size_unit": "pt",
+      "bold": false,
+      "alignment": ""
     },
 
-    "HEADING_2": {
-      "font": "Times New Roman",
-      "size": 10,
-      "bold": true,
-      "alignment": "left",
-      "space_before": 6,
-      "space_after": 3
+    "SUBHEADING": {
+      "font": "",
+      "font_size": 0,
+      "font_size_unit": "pt",
+      "bold": false,
+      "alignment": ""
     },
 
     "BODY": {
-      "font": "Times New Roman",
-      "size": 9,
-      "alignment": "justify",
-      "line_spacing": 1.0,
-      "first_line_indent": 0.15,
-      "space_after": 3
-    },
-
-    "LIST": {
-      "font": "Times New Roman",
-      "size": 9,
-      "alignment": "left",
-      "left_indent": 0.2
-    },
-
-    "EQUATION": {
-      "alignment": "center"
+      "font": "",
+      "font_size": 0,
+      "font_size_unit": "pt",
+      "alignment": "",
+      "line_spacing": 0,
+      "first_line_indent": 0,
+      "indent_unit": "cm"
     },
 
     "FIGURE": {
-      "alignment": "center",
-      "allow_column_width": true
+      "alignment": ""
     },
 
     "CAPTION": {
-      "font": "Times New Roman",
-      "size": 8,
-      "alignment": "center"
+      "font": "",
+      "font_size": 0,
+      "font_size_unit": "pt",
+      "alignment": ""
     },
 
     "TABLE": {
-      "font": "Times New Roman",
-      "size": 8,
-      "alignment": "center"
+      "font": "",
+      "font_size": 0,
+      "font_size_unit": "pt",
+      "alignment": ""
     },
 
     "REFERENCE": {
-      "font": "Times New Roman",
-      "size": 8,
-      "alignment": "left",
-      "hanging_indent": 0.2
+      "font": "",
+      "font_size": 0,
+      "font_size_unit": "pt",
+      "alignment": ""
     }
   },
 
   "numbering": {
-    "heading_1": "arabic",
-    "heading_2": "decimal",
-    "figures": "arabic",
-    "tables": "arabic"
-  },
-
-  "headers": {
-    "enabled": false
-  },
-
-  "footers": {
-    "enabled": true,
-    "page_number": {
-      "enabled": true,
-      "position": "bottom_center"
-    }
-  },
-
-  "references": {
-    "numbered": true,
-    "citation_style": "numeric"
+    "heading_1": "",
+    "subheading": "",
+    "figures": "",
+    "tables": "",
+    "references": ""
   },
 
   "validation": {
-    "check_two_column_layout": true,
-    "check_heading_hierarchy": true,
+    "check_page_layout": true,
+    "check_columns": true,
     "check_font": true,
-    "check_spacing": true,
+    "check_font_size": true,
+    "check_alignment": true,
+    "check_line_spacing": true,
+    "check_heading_hierarchy": true,
     "check_figures": true,
     "check_tables": true,
     "check_references": true

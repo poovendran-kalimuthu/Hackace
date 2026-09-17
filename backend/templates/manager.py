@@ -75,8 +75,8 @@ class TemplateManager:
             return self._cache[tid]
 
         # Support aliases for academic research paper
-        if tid in ("journal", "academic", "academic_research", "academic_paper", "academic research paper"):
-            for k in ("academic_research", "academic", "journal"):
+        if tid in ("journal", "academic", "academic_report", "academic_research", "academic_paper", "academic research paper", "academic report"):
+            for k in ("academic", "academic_report", "academic_research", "journal"):
                 if k in self._cache:
                     return self._cache[k]
 
