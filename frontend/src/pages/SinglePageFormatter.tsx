@@ -16,7 +16,10 @@ import {
   Layers,
   Sparkles,
   ShieldCheck,
-  Table as TableIcon
+  Table as TableIcon,
+  Database,
+  Clock,
+  HardDrive
 } from 'lucide-react';
 import { api } from '../services/api';
 import { BookTemplate } from '../types';
@@ -75,6 +78,12 @@ export const SinglePageFormatter: React.FC = () => {
   // Error State
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  // Storage & Saved Documents History State
+  const [storageStatus, setStorageStatus] = useState<any>(null);
+  const [showHistoryModal, setShowHistoryModal] = useState<boolean>(false);
+  const [savedProjects, setSavedProjects] = useState<any[]>([]);
+  const [isLoadingHistory, setIsLoadingHistory] = useState<boolean>(false);
+
   // Hidden File Inputs
   const docxInputRef = useRef<HTMLInputElement>(null);
   const logoInputRef = useRef<HTMLInputElement>(null);
@@ -100,10 +109,33 @@ export const SinglePageFormatter: React.FC = () => {
       } catch (err) {
         // silent fallback
       }
+
+      try {
+        const storage = await api.getStorageStatus();
+        setStorageStatus(storage);
+      } catch (err) {
+        // silent fallback
+      }
     };
 
     initData();
   }, []);
+
+  // Fetch saved projects history from MySQL
+  const openHistoryModal = async () => {
+    setShowHistoryModal(true);
+    setIsLoadingHistory(true);
+    try {
+      const projs = await api.getProjects();
+      setSavedProjects(projs || []);
+      const storage = await api.getStorageStatus();
+      setStorageStatus(storage);
+    } catch (err) {
+      console.warn('Failed to load saved projects history', err);
+    } finally {
+      setIsLoadingHistory(false);
+    }
+  };
 
   // Poll Job Status during processing state
   useEffect(() => {
@@ -279,33 +311,86 @@ export const SinglePageFormatter: React.FC = () => {
     setErrorMessage(null);
   };
 
+  const handleDownload = async () => {
+    if (!projectId) return;
+    try {
+      const exportUrl = api.getExportUrl(projectId);
+      const res = await fetch(exportUrl);
+      if (!res.ok) {
+        // Try to extract the error detail from FastAPI JSON response
+        let detail = 'Formatted output document not ready for download.';
+        try {
+          const errBody = await res.json();
+          if (errBody?.detail) detail = errBody.detail;
+        } catch (_) {}
+        throw new Error(detail);
+      }
+      const blob = await res.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      // Use Content-Disposition filename if available, otherwise derive from manuscript
+      const disposition = res.headers.get('Content-Disposition');
+      let downloadName = manuscriptFile
+        ? manuscriptFile.name.replace(/\.docx$/i, '_formatted.docx')
+        : 'Formatted_Document.docx';
+      if (disposition) {
+        const match = disposition.match(/filename="([^"]+)"/);
+        if (match) downloadName = match[1];
+      }
+      link.download = downloadName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(blobUrl);
+    } catch (err: any) {
+      setErrorMessage(err.message || 'Failed to download formatted document.');
+    }
+  };
+
   const isFormValid = Boolean(manuscriptFile && selectedTemplateId && logoInfo);
 
   // ----------------------------------------------------
   // RENDER
   // ----------------------------------------------------
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col font-sans selection:bg-blue-100 selection:text-blue-900">
+    <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col font-sans selection:bg-blue-100 selection:text-blue-900 overflow-y-auto">
       {/* HEADER */}
       <header className="bg-white border-b border-slate-200/80 px-6 py-4 shadow-sm sticky top-0 z-20">
         <div className="max-w-4xl mx-auto flex items-center justify-between">
           <div>
-            <h1 className="text-lg font-bold tracking-tight text-slate-900 uppercase">
-              INTELLIGENT DOCUMENT FORMATTER
+            <h1 className="text-lg font-bold tracking-tight text-slate-900 uppercase flex items-center space-x-2">
+              <span>INTELLIGENT DOCUMENT FORMATTER</span>
             </h1>
             <p className="text-xs text-slate-500 font-medium tracking-wide">
               Offline • Private • Publication Ready
             </p>
           </div>
-          <div className="flex items-center space-x-2 text-xs text-slate-600 bg-slate-100 px-3 py-1.5 rounded-full border border-slate-200">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-            <span className="font-semibold text-[11px] text-slate-700">100% Local Machine</span>
+          
+          {/* Storage & Saved Documents Badges */}
+          <div className="flex items-center space-x-3">
+            <div className="flex items-center space-x-1.5 text-xs bg-emerald-50 text-emerald-800 border border-emerald-200 px-3 py-1.5 rounded-full shadow-xs">
+              <Database className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />
+              <span className="font-semibold text-[11px]">
+                {storageStatus?.engine || 'MySQL'}: {storageStatus?.info?.database || 'docucraft_db'} ({storageStatus?.connected ? 'Connected' : 'Active'})
+              </span>
+            </div>
+
+            <button
+              type="button"
+              onClick={openHistoryModal}
+              className="flex items-center space-x-1.5 text-xs text-slate-700 bg-white hover:bg-slate-100 border border-slate-200 px-3 py-1.5 rounded-full shadow-xs cursor-pointer transition active:scale-[0.98]"
+              title="View documents stored in local MySQL database"
+            >
+              <Clock className="w-3.5 h-3.5 text-indigo-600 flex-shrink-0" />
+              <span className="font-semibold text-[11px]">Saved Documents</span>
+            </button>
           </div>
         </div>
       </header>
 
       {/* MAIN CONTAINER */}
-      <main className="flex-1 max-w-4xl w-full mx-auto p-6 md:p-8 flex flex-col justify-center">
+      <main className="flex-1 max-w-4xl w-full mx-auto p-6 md:p-8 flex flex-col justify-start">
         {/* HUMAN-READABLE ERROR BANNER */}
         {errorMessage && (
           <div className="mb-6 p-4 rounded-xl bg-red-50 border border-red-200 flex items-start space-x-3 text-red-800 text-xs shadow-sm">
@@ -902,16 +987,25 @@ export const SinglePageFormatter: React.FC = () => {
               </div>
             </div>
 
+            {/* Local MySQL Storage Confirmation */}
+            <div className="flex items-center space-x-2 text-xs text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-xl p-3.5 shadow-sm">
+              <Database className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+              <span>
+                <strong>Saved to Local MySQL:</strong> Document metadata, checkpoints, validation reports, and extracted structure are safely stored in your local <code>{storageStatus?.info?.database || 'docucraft_db'}</code> database.
+              </span>
+            </div>
+
+
             {/* Primary Action Button: Save Formatted DOCX */}
             <div className="pt-2 space-y-3">
-              <a
-                href={api.getExportUrl(projectId)}
-                download
-                className="w-full py-4 px-6 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm uppercase tracking-wider shadow-md transition flex items-center justify-center space-x-2 active:scale-[0.99]"
+              <button
+                type="button"
+                onClick={handleDownload}
+                className="w-full py-4 px-6 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm uppercase tracking-wider shadow-md transition flex items-center justify-center space-x-2 active:scale-[0.99] cursor-pointer"
               >
                 <FileDown className="w-5 h-5" />
                 <span>SAVE FORMATTED DOCX</span>
-              </a>
+              </button>
 
               <div className="text-center">
                 <button
@@ -930,12 +1024,98 @@ export const SinglePageFormatter: React.FC = () => {
       <footer className="border-t border-slate-200/80 bg-white py-3 px-6 text-center text-xs text-slate-400">
         <div className="max-w-4xl mx-auto flex items-center justify-between">
           <span>DocuCraft Pro • Offline Desktop Utility</span>
-          <span>Zero external telemetry • 100% Private</span>
+          <span>Storage: {storageStatus?.engine || 'MySQL'} • {storageStatus?.info?.database || 'docucraft_db'}</span>
         </div>
       </footer>
+
+      {/* SAVED DOCUMENTS IN MYSQL HISTORY MODAL */}
+      {showHistoryModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <div className="bg-white border border-slate-200 rounded-2xl max-w-2xl w-full max-h-[85vh] flex flex-col shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+            {/* Modal Header */}
+            <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
+              <div className="flex items-center space-x-2">
+                <Database className="w-5 h-5 text-emerald-600" />
+                <h3 className="text-base font-bold text-slate-900">
+                  Saved Documents in Local MySQL ({storageStatus?.info?.database || 'docucraft_db'})
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowHistoryModal(false)}
+                className="text-slate-400 hover:text-slate-700 transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-6 flex-1 overflow-y-auto space-y-4">
+              {isLoadingHistory ? (
+                <div className="text-center py-12 text-slate-500 text-xs flex items-center justify-center space-x-2">
+                  <RefreshCw className="w-4 h-4 animate-spin text-emerald-600" />
+                  <span>Reading local MySQL storage...</span>
+                </div>
+              ) : savedProjects.length === 0 ? (
+                <div className="text-center py-12 text-slate-400 text-xs">
+                  <HardDrive className="w-8 h-8 mx-auto mb-2 text-slate-300" />
+                  <p className="font-semibold text-slate-600">No saved documents found in MySQL database.</p>
+                  <p className="mt-1">Format your first document to populate local storage.</p>
+                </div>
+              ) : (
+                savedProjects.map((proj) => (
+                  <div
+                    key={proj.id}
+                    className="border border-slate-200 hover:border-slate-300 bg-white rounded-xl p-4 flex items-center justify-between shadow-xs transition"
+                  >
+                    <div className="space-y-1">
+                      <div className="flex items-center space-x-2">
+                        <span className="font-bold text-sm text-slate-900">{proj.name}</span>
+                        <span className="text-[10px] font-semibold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full uppercase">
+                          {proj.status || 'SAVED'}
+                        </span>
+                      </div>
+                      <div className="text-xs text-slate-500 flex items-center space-x-3">
+                        <span>📄 {proj.page_count || 0} pages</span>
+                        <span>📝 {proj.word_count || 0} words</span>
+                        <span>🔖 Template: {proj.template_id || 'book'}</span>
+                      </div>
+                      <div className="text-[11px] text-slate-400">
+                        Saved: {proj.created_at ? new Date(proj.created_at).toLocaleString() : 'Recently'}
+                      </div>
+                    </div>
+
+                    <a
+                      href={api.getExportUrl(proj.id)}
+                      download
+                      className="py-2 px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold flex items-center space-x-1.5 shadow-xs transition active:scale-[0.98]"
+                    >
+                      <FileDown className="w-3.5 h-3.5" />
+                      <span>Download DOCX</span>
+                    </a>
+                  </div>
+                ))
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="px-6 py-3 border-t border-slate-200 bg-slate-50 flex items-center justify-between text-xs text-slate-500">
+              <span>Total MySQL Records: {storageStatus?.total_records || savedProjects.length}</span>
+              <button
+                type="button"
+                onClick={() => setShowHistoryModal(false)}
+                className="px-4 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg font-semibold transition"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
+
 
 // Utility function to format file sizes cleanly
 function formatFileSize(bytes: number): string {

@@ -12,7 +12,7 @@ import logging
 import os
 import sqlite3
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, Iterable, List, Optional, Union
 
 try:
     import pymysql
@@ -22,6 +22,34 @@ except ImportError:
     HAS_PYMYSQL = False
 
 logger = logging.getLogger("docucraft.database")
+
+
+def load_dotenv_env() -> None:
+    """Zero-dependency .env loader for local environment configuration."""
+    candidates = [
+        os.path.join(os.getcwd(), ".env"),
+        os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), ".env"),
+    ]
+    for filepath in candidates:
+        if os.path.exists(filepath):
+            try:
+                with open(filepath, "r", encoding="utf-8") as f:
+                    for line in f:
+                        line = line.strip()
+                        if not line or line.startswith("#") or "=" not in line:
+                            continue
+                        k, v = line.split("=", 1)
+                        k = k.strip()
+                        v = v.strip().strip("'\"")
+                        if k and k not in os.environ:
+                            os.environ[k] = v
+                break
+            except Exception as e:
+                logger.debug(f"Could not load .env from {filepath}: {e}")
+
+
+# Automatically populate environment from .env if present
+load_dotenv_env()
 
 
 class MySQLCursorWrapper:
@@ -36,6 +64,10 @@ class MySQLCursorWrapper:
         if params is not None:
             return self.cursor.execute(query_mod, params)
         return self.cursor.execute(query_mod)
+
+    def executemany(self, query: str, seq_of_params: Iterable[Union[tuple, list, dict]]):
+        query_mod = query.replace("?", "%s")
+        return self.cursor.executemany(query_mod, seq_of_params)
 
     def fetchone(self) -> Optional[Dict[str, Any]]:
         return self.cursor.fetchone()
@@ -75,6 +107,12 @@ class MySQLConnectionWrapper:
         wrapper.execute(query, params)
         return wrapper
 
+    def executemany(self, query: str, seq_of_params: Iterable[Union[tuple, list, dict]]) -> MySQLCursorWrapper:
+        cursor = self.raw_conn.cursor(pymysql.cursors.DictCursor)
+        wrapper = MySQLCursorWrapper(cursor)
+        wrapper.executemany(query, seq_of_params)
+        return wrapper
+
     def commit(self) -> None:
         self.raw_conn.commit()
 
@@ -107,6 +145,9 @@ class SQLiteConnectionWrapper:
         if params is not None:
             return self.raw_conn.execute(query, params)
         return self.raw_conn.execute(query)
+
+    def executemany(self, query: str, seq_of_params: Iterable[Union[tuple, list, dict]]):
+        return self.raw_conn.executemany(query, seq_of_params)
 
     def commit(self) -> None:
         self.raw_conn.commit()
@@ -353,6 +394,34 @@ class Database:
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
                 """
             )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS document_index (
+                    document_id VARCHAR(64) NOT NULL,
+                    block_id VARCHAR(64) NOT NULL,
+                    original_index INT NOT NULL,
+                    chapter_id VARCHAR(64),
+                    chapter_title VARCHAR(255),
+                    section_id VARCHAR(64),
+                    block_type VARCHAR(64) NOT NULL,
+                    text_preview TEXT,
+                    full_text LONGTEXT,
+                    word_count INT NOT NULL,
+                    char_count INT NOT NULL,
+                    has_images INT DEFAULT 0,
+                    has_tables INT DEFAULT 0,
+                    is_heading INT DEFAULT 0,
+                    confidence DOUBLE DEFAULT 1.0,
+                    estimated_page INT NOT NULL,
+                    raw_json LONGTEXT,
+                    PRIMARY KEY (document_id, block_id),
+                    INDEX idx_doc_orig (document_id, original_index),
+                    INDEX idx_doc_page (document_id, estimated_page),
+                    INDEX idx_doc_chap (document_id, chapter_id),
+                    INDEX idx_doc_type (document_id, block_type)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+                """
+            )
 
     def _init_sqlite_schema(self) -> None:
         """Initializes SQLite DDL schemas."""
@@ -489,6 +558,34 @@ class Database:
                 )
                 """
             )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS document_index (
+                    document_id TEXT NOT NULL,
+                    block_id TEXT NOT NULL,
+                    original_index INTEGER NOT NULL,
+                    chapter_id TEXT,
+                    chapter_title TEXT,
+                    section_id TEXT,
+                    block_type TEXT NOT NULL,
+                    text_preview TEXT,
+                    full_text TEXT,
+                    word_count INTEGER NOT NULL,
+                    char_count INTEGER NOT NULL,
+                    has_images INTEGER DEFAULT 0,
+                    has_tables INTEGER DEFAULT 0,
+                    is_heading INTEGER DEFAULT 0,
+                    confidence REAL DEFAULT 1.0,
+                    estimated_page INTEGER NOT NULL,
+                    raw_json TEXT,
+                    PRIMARY KEY (document_id, block_id)
+                )
+                """
+            )
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_doc_orig ON document_index (document_id, original_index)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_doc_page ON document_index (document_id, estimated_page)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_doc_chap ON document_index (document_id, chapter_id)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_doc_type ON document_index (document_id, block_type)")
 
     # ------------------ Job Operations ------------------ #
 
@@ -823,7 +920,7 @@ class Database:
                 logs.append(item)
             return logs
 
-    # ------------------ Diagnostic Information ------------------ #
+    # ------------------ Diagnostic & Storage Information ------------------ #
 
     def get_engine_info(self) -> Dict[str, Any]:
         """Returns diagnostic metadata about the active storage engine."""
@@ -834,10 +931,46 @@ class Database:
                 "host": self.mysql_host,
                 "port": self.mysql_port,
                 "database": self.mysql_db,
+                "user": self.mysql_user,
             }
         return {
             "engine": "SQLite",
             "wal_mode": True,
             "connected": True,
             "path": self.db_path,
+        }
+
+    def get_storage_stats(self) -> Dict[str, Any]:
+        """Returns engine information and table row counts across all local storage tables."""
+        info = self.get_engine_info()
+        tables = [
+            "projects",
+            "jobs",
+            "job_checkpoints",
+            "corrections",
+            "templates",
+            "logo_assets",
+            "validation_reports",
+            "audit_logs",
+            "document_index",
+        ]
+        counts: Dict[str, int] = {}
+        try:
+            with self.get_connection() as conn:
+                for tbl in tables:
+                    try:
+                        cur = conn.execute(f"SELECT COUNT(*) AS cnt FROM {tbl}")
+                        row = cur.fetchone()
+                        counts[tbl] = int(dict(row)["cnt"]) if row else 0
+                    except Exception:
+                        counts[tbl] = 0
+        except Exception as e:
+            logger.warning(f"Failed to fetch storage stats: {e}")
+
+        return {
+            "engine": info["engine"],
+            "connected": info["connected"],
+            "info": info,
+            "table_counts": counts,
+            "total_records": sum(counts.values()),
         }

@@ -144,6 +144,10 @@ def create_app(workspace_root: Optional[str] = None) -> FastAPI:
         metrics["db"] = global_db.get_engine_info()
         return metrics
 
+    @app.get("/api/storage/status")
+    def get_storage_status():
+        return global_db.get_storage_stats()
+
     # ------------------ Projects Endpoints ------------------ #
 
     @app.get("/api/projects")
@@ -205,7 +209,7 @@ def create_app(workspace_root: Optional[str] = None) -> FastAPI:
 
         # Initial scan to populate metadata
         db_path = os.path.join(p["root_dir"], "database", "project.db")
-        indexer = DocumentIndexer(db_path)
+        indexer = DocumentIndexer(db_path, db=global_db)
         parser = DocumentParser(dest_path)
         meta = parser.scan_and_index(document_id=project_id, indexer=indexer)
 
@@ -349,37 +353,7 @@ def create_app(workspace_root: Optional[str] = None) -> FastAPI:
             "logo_asset": global_db.get_logo_asset(project_id),
         }
 
-    @app.get("/api/projects/{project_id}/export")
-    def export_project_docx(project_id: str):
-        """Streams the publication-ready formatted DOCX file for local download."""
-        p = project_mgr.get_project(project_id)
-        if not p:
-            raise HTTPException(status_code=404, detail="Project not found")
 
-        proj_dir = project_mgr.get_project_dir(project_id)
-        out_dir = os.path.join(proj_dir, "output")
-        source_name = p.get("source_filename") or p.get("name", "manuscript")
-        base_source = os.path.splitext(source_name)[0]
-        safe_name = "".join(c if c.isalnum() or c in ("-", "_") else "_" for c in base_source).strip() or "manuscript"
-        download_filename = f"{safe_name}_formatted.docx"
-
-        out_file = os.path.join(out_dir, f"{p.get('name', 'manuscript')}_formatted.docx")
-        if not os.path.exists(out_file):
-            docx_candidates = [f for f in os.listdir(out_dir) if f.endswith(".docx")] if os.path.exists(out_dir) else []
-            if docx_candidates:
-                out_file = os.path.join(out_dir, docx_candidates[0])
-            else:
-                raise HTTPException(
-                    status_code=404,
-                    detail="Formatted publication DOCX not found. Please complete the formatting job first."
-                )
-
-        global_db.log_audit_event(project_id, "DOCX_EXPORTED", {"filename": os.path.basename(out_file)})
-        return FileResponse(
-            path=out_file,
-            media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-            filename=download_filename,
-        )
 
     @app.get("/api/jobs/{job_id}")
     def get_job_status(job_id: str):
@@ -409,10 +383,10 @@ def create_app(workspace_root: Optional[str] = None) -> FastAPI:
             raise HTTPException(status_code=404, detail="Project not found")
 
         db_path = os.path.join(p["root_dir"], "database", "project.db")
-        if not os.path.exists(db_path):
+        if not global_db.using_mysql and not os.path.exists(db_path):
             return []
 
-        indexer = DocumentIndexer(db_path)
+        indexer = DocumentIndexer(db_path, db=global_db)
         with indexer._get_conn() as conn:
             cursor = conn.execute(
                 """
@@ -433,7 +407,7 @@ def create_app(workspace_root: Optional[str] = None) -> FastAPI:
             raise HTTPException(status_code=404, detail="Project not found")
 
         db_path = os.path.join(p["root_dir"], "database", "project.db")
-        indexer = DocumentIndexer(db_path)
+        indexer = DocumentIndexer(db_path, db=global_db)
 
         new_type = BlockType(req.corrected_type)
         indexer.update_block_type(req.block_id, new_type, user_corrected=True)
@@ -458,10 +432,10 @@ def create_app(workspace_root: Optional[str] = None) -> FastAPI:
             raise HTTPException(status_code=404, detail="Project not found")
 
         db_path = os.path.join(p["root_dir"], "database", "project.db")
-        if not os.path.exists(db_path):
+        if not global_db.using_mysql and not os.path.exists(db_path):
             raise HTTPException(status_code=400, detail="Document not indexed yet.")
 
-        indexer = DocumentIndexer(db_path)
+        indexer = DocumentIndexer(db_path, db=global_db)
         blocks = indexer.get_blocks_for_page(project_id, page_number)
         stats = indexer.get_document_stats(project_id)
 
@@ -484,8 +458,8 @@ def create_app(workspace_root: Optional[str] = None) -> FastAPI:
 
         # Fallback to index chapters
         db_path = os.path.join(p["root_dir"], "database", "project.db")
-        if os.path.exists(db_path):
-            indexer = DocumentIndexer(db_path)
+        if global_db.using_mysql or os.path.exists(db_path):
+            indexer = DocumentIndexer(db_path, db=global_db)
             return {"chapters": indexer.get_chapters(project_id)}
 
         return {}
@@ -497,11 +471,64 @@ def create_app(workspace_root: Optional[str] = None) -> FastAPI:
             raise HTTPException(status_code=404, detail="Project not found")
 
         db_path = os.path.join(p["root_dir"], "database", "project.db")
-        if not os.path.exists(db_path):
+        if not global_db.using_mysql and not os.path.exists(db_path):
             return []
 
-        indexer = DocumentIndexer(db_path)
+        indexer = DocumentIndexer(db_path, db=global_db)
         return indexer.search(project_id, q, limit=limit)
+
+    @app.get("/api/projects/{project_id}/export")
+    def export_project_document(project_id: str):
+        """Streams the publication-ready formatted DOCX for local download."""
+        p = project_mgr.get_project(project_id)
+        if not p:
+            raise HTTPException(status_code=404, detail="Project not found")
+
+        root_dir: str = p["root_dir"]
+        out_dir = os.path.join(root_dir, "output")
+
+        # Build the expected filename candidates (most-specific first)
+        proj_name_safe = "".join(
+            c if c.isalnum() or c in ("-", "_") else "_"
+            for c in p.get("name", "manuscript")
+        ).strip() or "manuscript"
+        source_name = p.get("source_filename") or ""
+        base_source_safe = "".join(
+            c if c.isalnum() or c in ("-", "_") else "_"
+            for c in os.path.splitext(source_name)[0]
+        ).strip() or proj_name_safe
+
+        # Search output directory for any DOCX
+        out_path: str | None = None
+        if os.path.exists(out_dir):
+            # Prefer files that contain "formatted"
+            all_docx = [f for f in os.listdir(out_dir) if f.lower().endswith(".docx")]
+            formatted = [f for f in all_docx if "formatted" in f.lower()]
+            chosen = formatted[0] if formatted else (all_docx[0] if all_docx else None)
+            if chosen:
+                out_path = os.path.join(out_dir, chosen)
+
+        if not out_path or not os.path.exists(out_path):
+            raise HTTPException(
+                status_code=404,
+                detail=(
+                    "Formatted output DOCX not found. "
+                    "Please run a formatting job first."
+                ),
+            )
+
+        download_name = f"{base_source_safe}_formatted.docx"
+        global_db.log_audit_event(
+            project_id, "DOCX_EXPORTED", {"filename": os.path.basename(out_path)}
+        )
+        return FileResponse(
+            path=out_path,
+            media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            headers={
+                "Content-Disposition": f'attachment; filename="{download_name}"',
+                "Cache-Control": "no-cache",
+            },
+        )
 
     # ------------------ Templates Endpoints ------------------ #
 
@@ -542,7 +569,7 @@ def create_app(workspace_root: Optional[str] = None) -> FastAPI:
                 proj_src = os.path.join(p["root_dir"], "source", fname)
                 shutil.copyfile(out_path, proj_src)
                 db_path = os.path.join(p["root_dir"], "database", "project.db")
-                indexer = DocumentIndexer(db_path)
+                indexer = DocumentIndexer(db_path, db=global_db)
                 parser = DocumentParser(proj_src)
                 meta = parser.scan_and_index(document_id=req.project_id, indexer=indexer)
                 project_mgr.update_project(
@@ -562,22 +589,6 @@ def create_app(workspace_root: Optional[str] = None) -> FastAPI:
             "pages": req.pages,
             "output_path": out_path,
         }
-
-    # ------------------ WebSocket Live Telemetry ------------------ #
-
-    @app.websocket("/ws/telemetry")
-    async def websocket_telemetry(websocket: WebSocket):
-        await websocket.accept()
-        active_connections.append(websocket)
-        try:
-            while True:
-                # Keep connection alive & respond to client ping
-                data = await websocket.receive_text()
-                if data == "ping":
-                    await websocket.send_text(json.dumps({"type": "pong"}))
-        except WebSocketDisconnect:
-            if websocket in active_connections:
-                active_connections.remove(websocket)
 
     return app
 

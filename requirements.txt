@@ -1,0 +1,15 @@
+fastapi
+uvicorn
+pydantic
+pillow
+python-docx
+latex2mathml
+lxml
+joblib
+numpy
+scikit-learn
+xgboost
+psutil
+pymysql
+pytest
+pywebview

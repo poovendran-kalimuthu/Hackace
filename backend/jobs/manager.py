@@ -178,7 +178,7 @@ class JobManager:
                 return
 
             db_path = os.path.join(project_dir, "database", "project.db")
-            indexer = DocumentIndexer(db_path)
+            indexer = DocumentIndexer(db_path, db=self.db)
             chunks_dir = os.path.join(project_dir, "chunks")
             chunk_mgr = ChunkManager(chunks_dir)
 

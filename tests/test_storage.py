@@ -154,3 +154,50 @@ def test_sqlite_fallback_mode(tmp_path):
     j = db.get_job(job_id)
     assert j is not None
     assert j["status"] == "QUEUED"
+
+
+def test_executemany_and_storage_stats():
+    """Verifies executemany wrapper and storage stats summary."""
+    db = Database()
+    stats = db.get_storage_stats()
+    assert "engine" in stats
+    assert "table_counts" in stats
+    assert "projects" in stats["table_counts"]
+    assert "document_index" in stats["table_counts"]
+    assert isinstance(stats["total_records"], int)
+
+
+def test_document_indexer_mysql_integration():
+    """Verifies DocumentIndexer operations using active Database engine (MySQL or SQLite)."""
+    from backend.document.indexer import DocumentIndexer
+    from backend.document.model import Block, BlockType
+
+    db = Database()
+    indexer = DocumentIndexer(db=db)
+
+    doc_id = "test_doc_mysql_1001"
+    blocks = [
+        Block(id="blk_1", block_type=BlockType.CHAPTER_TITLE, text="Chapter 1: The Dawn", original_index=0),
+        Block(id="blk_2", block_type=BlockType.BODY, text="This paragraph is stored in MySQL local storage.", original_index=1),
+    ]
+
+    res = indexer.index_blocks(doc_id, blocks)
+    assert res["total_blocks"] == 2
+    assert res["total_chapters"] == 1
+
+    stats = indexer.get_document_stats(doc_id)
+    assert stats["total_blocks"] == 2
+    assert stats["total_pages"] >= 1
+
+    search_res = indexer.search(doc_id, "paragraph")
+    assert len(search_res) == 1
+    assert search_res[0]["block_id"] == "blk_2"
+
+    chapters = indexer.get_chapters(doc_id)
+    assert len(chapters) == 1
+    assert chapters[0]["chapter_title"] == "Chapter 1: The Dawn"
+
+    # Cleanup test document index
+    with db.get_connection() as conn:
+        conn.execute("DELETE FROM document_index WHERE document_id = ?", (doc_id,))
+

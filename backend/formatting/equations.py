@@ -146,7 +146,12 @@ def render_paragraph_content(
                 r.font.size = Pt(font_size_pt)
             r.bold = r_meta.bold if r_meta.bold is not None else is_bold
             r.italic = r_meta.italic if r_meta.italic is not None else is_italic
-            r.underline = r_meta.underline
+            # IMPORTANT: Only copy underline if explicitly True in source.
+            # Never copy None / WD_UNDERLINE.INHERIT — that causes every word to appear underlined.
+            if r_meta.underline is True:
+                r.underline = True
+            else:
+                r.underline = False
             if r_meta.color and r_meta.color.startswith("#") and len(r_meta.color) == 7:
                 try:
                     hex_val = r_meta.color.lstrip("#")

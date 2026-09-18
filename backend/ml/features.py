@@ -1,8 +1,11 @@
 """
 Typographical, Structural, and Syntactic Feature Extractor.
 
-Extracts over 30 numerical and normalized features per block for
-high-accuracy classification with Random Forest.
+Extracts 40 numerical and normalized features per block for
+high-accuracy classification with XGBoost / Random Forest.
+
+Feature additions aligned with Book Publisher template spec:
+  - is_part_pattern, is_heading_2_pattern, is_heading_3_pattern, is_reference_pattern
 """
 
 from __future__ import annotations
@@ -47,7 +50,7 @@ class FeatureExtractor:
         "is_single_sentence",
         "ends_with_colon",
         "ends_with_question",
-        # Structural Patterns (7)
+        # Structural Patterns — core (7)
         "is_chapter_pattern",
         "is_numbered_heading",
         "is_figure_caption_pattern",
@@ -55,6 +58,11 @@ class FeatureExtractor:
         "is_list_pattern",
         "has_quote_marks",
         "is_short_title",
+        # Structural Patterns — book-specific (4) [NEW]
+        "is_part_pattern",
+        "is_heading_2_pattern",
+        "is_heading_3_pattern",
+        "is_reference_pattern",
         # Contextual Signals (5)
         "prev_is_heading",
         "prev_is_image",
@@ -63,7 +71,7 @@ class FeatureExtractor:
         "document_position_ratio",
     ]
 
-    def __init__(self, median_body_font_size: float = 11.0):
+    def __init__(self, median_body_font_size: float = 12.0):
         self.median_font_size = median_body_font_size
 
     def extract_features(
@@ -105,14 +113,14 @@ class FeatureExtractor:
         underline_ratio = underline_chars / divisor
 
         # 2. Layout
-        align_center = 1.0 if block.alignment == "CENTER" else 0.0
-        align_right = 1.0 if block.alignment == "RIGHT" else 0.0
+        align_center  = 1.0 if block.alignment == "CENTER"  else 0.0
+        align_right   = 1.0 if block.alignment == "RIGHT"   else 0.0
         align_justify = 1.0 if block.alignment == "JUSTIFY" else 0.0
 
         # 3. Linguistics
         ling = OfflineTokenizer.extract_linguistic_stats(text)
 
-        # 4. Pattern matches
+        # 4. Pattern matches (includes 4 new book-specific patterns)
         patterns = StructuralPatternMatcher.match_patterns(text)
 
         # 5. Context
@@ -122,6 +130,7 @@ class FeatureExtractor:
         if prev_block:
             if prev_block.block_type in (
                 BlockType.CHAPTER_TITLE,
+                BlockType.PART_TITLE,
                 BlockType.HEADING_1,
                 BlockType.HEADING_2,
                 BlockType.HEADING_3,
@@ -139,42 +148,52 @@ class FeatureExtractor:
         pos_ratio = block.original_index / max(1, total_blocks)
 
         feat: Dict[str, float] = {
-            "font_size_pt": float(effective_font_size),
-            "relative_font_size": float(rel_font_size),
-            "bold_ratio": float(bold_ratio),
-            "italic_ratio": float(italic_ratio),
-            "underline_ratio": float(underline_ratio),
-            "is_all_bold": 1.0 if bold_ratio > 0.9 and text_len > 0 else 0.0,
-            "is_all_italic": 1.0 if italic_ratio > 0.9 and text_len > 0 else 0.0,
-            "align_center": align_center,
-            "align_right": align_right,
-            "align_justify": align_justify,
-            "left_indent_pt": float(block.left_indent_pt),
-            "right_indent_pt": float(block.right_indent_pt),
-            "space_before_pt": float(block.space_before_pt),
-            "space_after_pt": float(block.space_after_pt),
-            "is_page_break": 1.0 if block.is_page_break else 0.0,
-            "word_count": ling["word_count"],
-            "char_count": ling["char_count"],
-            "uppercase_ratio": ling["uppercase_ratio"],
-            "digit_ratio": ling["digit_ratio"],
-            "punctuation_density": ling["punctuation_density"],
-            "avg_sentence_len": ling["avg_sentence_len"],
-            "is_single_sentence": ling["is_single_sentence"],
-            "ends_with_colon": ling["ends_with_colon"],
-            "ends_with_question": ling["ends_with_question"],
-            "is_chapter_pattern": patterns["is_chapter_pattern"],
-            "is_numbered_heading": patterns["is_numbered_heading"],
+            # Typography
+            "font_size_pt":              float(effective_font_size),
+            "relative_font_size":        float(rel_font_size),
+            "bold_ratio":                float(bold_ratio),
+            "italic_ratio":              float(italic_ratio),
+            "underline_ratio":           float(underline_ratio),
+            "is_all_bold":               1.0 if bold_ratio > 0.9 and text_len > 0 else 0.0,
+            "is_all_italic":             1.0 if italic_ratio > 0.9 and text_len > 0 else 0.0,
+            # Layout
+            "align_center":              align_center,
+            "align_right":               align_right,
+            "align_justify":             align_justify,
+            "left_indent_pt":            float(block.left_indent_pt),
+            "right_indent_pt":           float(block.right_indent_pt),
+            "space_before_pt":           float(block.space_before_pt),
+            "space_after_pt":            float(block.space_after_pt),
+            "is_page_break":             1.0 if block.is_page_break else 0.0,
+            # Linguistics
+            "word_count":                ling["word_count"],
+            "char_count":                ling["char_count"],
+            "uppercase_ratio":           ling["uppercase_ratio"],
+            "digit_ratio":               ling["digit_ratio"],
+            "punctuation_density":       ling["punctuation_density"],
+            "avg_sentence_len":          ling["avg_sentence_len"],
+            "is_single_sentence":        ling["is_single_sentence"],
+            "ends_with_colon":           ling["ends_with_colon"],
+            "ends_with_question":        ling["ends_with_question"],
+            # Core structural patterns
+            "is_chapter_pattern":        patterns["is_chapter_pattern"],
+            "is_numbered_heading":       patterns["is_numbered_heading"],
             "is_figure_caption_pattern": patterns["is_figure_caption_pattern"],
-            "is_table_caption_pattern": patterns["is_table_caption_pattern"],
-            "is_list_pattern": patterns["is_list_pattern"],
-            "has_quote_marks": patterns["has_quote_marks"],
-            "is_short_title": patterns["is_short_title"],
-            "prev_is_heading": prev_is_heading,
-            "prev_is_image": prev_is_img,
-            "prev_is_table": prev_is_tbl,
-            "next_is_body": next_is_body,
-            "document_position_ratio": float(pos_ratio),
+            "is_table_caption_pattern":  patterns["is_table_caption_pattern"],
+            "is_list_pattern":           patterns["is_list_pattern"],
+            "has_quote_marks":           patterns["has_quote_marks"],
+            "is_short_title":            patterns["is_short_title"],
+            # Book-specific structural patterns (NEW)
+            "is_part_pattern":           patterns["is_part_pattern"],
+            "is_heading_2_pattern":      patterns["is_heading_2_pattern"],
+            "is_heading_3_pattern":      patterns["is_heading_3_pattern"],
+            "is_reference_pattern":      patterns["is_reference_pattern"],
+            # Context
+            "prev_is_heading":           prev_is_heading,
+            "prev_is_image":             prev_is_img,
+            "prev_is_table":             prev_is_tbl,
+            "next_is_body":              next_is_body,
+            "document_position_ratio":   float(pos_ratio),
         }
         return feat
 
@@ -185,6 +204,6 @@ class FeatureExtractor:
         next_block: Optional[Block] = None,
         total_blocks: int = 1,
     ) -> np.ndarray:
-        """Extract ordered feature vector for scikit-learn model."""
+        """Extract ordered feature vector for scikit-learn / XGBoost model."""
         f_dict = self.extract_features(block, prev_block, next_block, total_blocks)
         return np.array([f_dict[name] for name in self.FEATURE_NAMES], dtype=np.float32)

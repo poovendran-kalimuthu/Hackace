@@ -1,15 +1,14 @@
 """
-Unified Desktop Application Launcher.
+DocuCraft Pro - Native Python Desktop GUI Launcher.
 
-Starts the local high-performance FastAPI backend server, binds WebSocket telemetry,
-spawns the Vite desktop interface, and launches the application.
+Launches the offline FastAPI backend, Vite dev server, and wraps the application
+inside a native desktop window powered by pywebview.
 """
 
 import os
 import sys
 import time
 import subprocess
-import webbrowser
 import threading
 import uvicorn
 import psutil
@@ -55,8 +54,8 @@ def run_backend(host="127.0.0.1", port=8000):
 
 def main():
     print("=" * 70)
-    print("   DocuCraft Pro: Intelligent Offline Document & Book Formatter")
-    print("   100% Offline • Zero Cloud AI • Up to 10,000+ Pages Support")
+    print("   DocuCraft Pro: Native Python Desktop GUI")
+    print("   100% Offline • Zero Cloud AI • Native Windows Desktop Window")
     print("=" * 70)
 
     # 0. Free ports if in use by previous background instances
@@ -75,25 +74,40 @@ def main():
         subprocess.run(["npm", "install"], cwd=frontend_dir, shell=True)
 
     print("[Frontend] Starting desktop interface...")
-    # Start Vite in subprocess
     frontend_proc = subprocess.Popen(
         ["npm", "run", "dev"],
         cwd=frontend_dir,
         shell=True,
     )
 
-    # 3. Open desktop browser window
     app_url = "http://localhost:5173"
-    print(f"\n>>> Application ready at: {app_url}")
-    print(">>> Opening application in your browser/desktop shell...\n")
+    print(f"\n>>> Launching Native Desktop GUI Window at: {app_url}\n")
     time.sleep(2)
-    webbrowser.open(app_url)
 
     try:
+        import webview
+        # Open Native Desktop Window
+        webview.create_window(
+            title="DocuCraft Pro - Intelligent Offline Document & Book Formatter",
+            url=app_url,
+            width=1280,
+            height=850,
+            resizable=True,
+            min_size=(900, 600),
+        )
+        webview.start()
+    except Exception as e:
+        print(f"[GUI Fallback] pywebview GUI exception: {e}")
+        print("Fallback to standard web browser window...")
+        import webbrowser
+        webbrowser.open(app_url)
         frontend_proc.wait()
-    except KeyboardInterrupt:
-        print("\nShutting down DocuCraft Pro...")
-        frontend_proc.terminate()
+    finally:
+        print("\nShutting down DocuCraft Pro Desktop GUI...")
+        try:
+            frontend_proc.terminate()
+        except Exception:
+            pass
 
 
 if __name__ == "__main__":

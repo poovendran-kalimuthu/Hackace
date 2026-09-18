@@ -116,6 +116,11 @@ class DocxReader:
 
                     idx = 0
                     for event, elem in context:
+                        # Skip paragraphs inside table cells so they are not yielded as separate body blocks
+                        # and not cleared before the table itself is parsed!
+                        if elem.tag == f"{{{W_NS}}}p" and self._is_inside_table(elem):
+                            continue
+
                         block = self._parse_element(elem, idx)
                         if block:
                             yield block
@@ -128,6 +133,18 @@ class DocxReader:
         except Exception as e:
             # If iterparse fails (e.g. malformed low-level XML), fallback to python-docx
             yield from self._fallback_python_docx_stream()
+
+    @staticmethod
+    def _is_inside_table(elem: etree._Element) -> bool:
+        """Returns True if the element is inside a w:tbl (table)."""
+        curr = elem.getparent()
+        while curr is not None:
+            if curr.tag == f"{{{W_NS}}}tbl":
+                return True
+            if curr.tag == f"{{{W_NS}}}body":
+                return False
+            curr = curr.getparent()
+        return False
 
     def _parse_element(self, elem: etree._Element, index: int) -> Optional[Block]:
         tag = elem.tag
@@ -185,22 +202,52 @@ class DocxReader:
                 if right and right.isdigit():
                     right_indent = float(right) / 20.0
 
+            # Extract tab stops if defined on paragraph
+            tabs_el = pPr.find(f"{{{W_NS}}}tabs")
+            tab_stops = []
+            if tabs_el is not None:
+                for tab in tabs_el.findall(f"{{{W_NS}}}tab"):
+                    val = tab.get(f"{{{W_NS}}}val", "left")
+                    leader = tab.get(f"{{{W_NS}}}leader", "none")
+                    pos = tab.get(f"{{{W_NS}}}pos")
+                    if pos and pos.lstrip("-").isdigit():
+                        tab_stops.append({
+                            "val": val,
+                            "leader": leader,
+                            "pos_pt": float(pos) / 20.0,
+                        })
+
             # Check for page break before
             if pPr.find(f"{{{W_NS}}}pageBreakBefore") is not None:
                 is_page_break = True
+        else:
+            tab_stops = []
 
         # Extract runs
         images_found: List[str] = []
         for r_elem in elem.findall(f"{{{W_NS}}}r"):
-            r_text = ""
+            r_text_parts: List[str] = []
+
             # Check for explicit page break inside run
             for br in r_elem.findall(f"{{{W_NS}}}br"):
                 if br.get(f"{{{W_NS}}}type") == "page":
                     is_page_break = True
 
-            t_elements = r_elem.findall(f"{{{W_NS}}}t")
-            if t_elements:
-                r_text = "".join(t.text for t in t_elements if t.text)
+            # Preserve all text and tabulation characters in order of appearance
+            for child in r_elem:
+                c_tag = child.tag
+                if c_tag == f"{{{W_NS}}}t":
+                    if child.text:
+                        r_text_parts.append(child.text)
+                elif c_tag == f"{{{W_NS}}}tab":
+                    r_text_parts.append("\t")
+                elif c_tag == f"{{{W_NS}}}br":
+                    if child.get(f"{{{W_NS}}}type") != "page":
+                        r_text_parts.append("\n")
+                elif c_tag == f"{{{W_NS}}}cr":
+                    r_text_parts.append("\n")
+
+            r_text = "".join(r_text_parts)
 
             # Check for embedded drawings/images
             drawings = r_elem.findall(f".//{{{W_NS}}}drawing")
@@ -267,6 +314,8 @@ class DocxReader:
         metadata: Dict[str, Any] = {}
         if images_found:
             metadata["image_rel_ids"] = images_found
+        if tab_stops:
+            metadata["tab_stops"] = tab_stops
 
         # CRITICAL: Ignore page breaks on empty/whitespace-only paragraphs to prevent ghost blank pages
         if not full_text and not images_found:
@@ -296,10 +345,22 @@ class DocxReader:
             for cell in row.findall(f"{{{W_NS}}}tc"):
                 cell_text_parts: List[str] = []
                 for p in cell.findall(f"{{{W_NS}}}p"):
-                    for t in p.findall(f".//{{{W_NS}}}t"):
-                        if t.text:
-                            cell_text_parts.append(t.text)
-                row_cells.append(" ".join(cell_text_parts).strip())
+                    p_runs: List[str] = []
+                    for r in p.findall(f"{{{W_NS}}}r"):
+                        for child in r:
+                            c_tag = child.tag
+                            if c_tag == f"{{{W_NS}}}t" and child.text:
+                                p_runs.append(child.text)
+                            elif c_tag == f"{{{W_NS}}}tab":
+                                p_runs.append("\t")
+                    if not p_runs:
+                        fallback_txt = "".join(p.itertext()).strip()
+                        if fallback_txt:
+                            p_runs.append(fallback_txt)
+                    p_str = "".join(p_runs).strip()
+                    if p_str:
+                        cell_text_parts.append(p_str)
+                row_cells.append("\n".join(cell_text_parts).strip())
             table_data.append(row_cells)
 
         text_representation = "\n".join(" | ".join(r) for r in table_data)

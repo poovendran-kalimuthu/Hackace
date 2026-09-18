@@ -174,10 +174,16 @@ export const api = {
     return res.json();
   },
 
-  // Diagnostics
+  // Diagnostics & Local Storage Status
   async getDiagnostics(): Promise<any> {
     const res = await fetch(`${API_BASE}/diagnostics`);
     if (!res.ok) throw new Error('Failed to load diagnostics');
+    return res.json();
+  },
+
+  async getStorageStatus(): Promise<any> {
+    const res = await fetch(`${API_BASE}/storage/status`);
+    if (!res.ok) throw new Error('Failed to load storage status');
     return res.json();
   },
 

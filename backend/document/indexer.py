@@ -7,28 +7,39 @@ and high-speed search across 10,000+ page manuscripts.
 
 from __future__ import annotations
 import math
+import os
 import sqlite3
 from typing import Any, Dict, Generator, Iterable, List, Optional, Tuple
 
+from backend.storage.database import SQLiteConnectionWrapper
 from .model import Block, BlockType
 
 
 class DocumentIndexer:
     """
     Manages indexing, pagination estimation, chapter hierarchy mapping,
-    and full-text lookup in SQLite.
+    and full-text lookup in MySQL or SQLite.
     """
 
-    def __init__(self, db_path: str):
+    def __init__(self, db_path: Optional[str] = None, db: Optional[Any] = None):
         self.db_path = db_path
+        self.db = db
+        if self.db_path:
+            os.makedirs(os.path.dirname(os.path.abspath(self.db_path)), exist_ok=True)
         self._init_tables()
 
-    def _get_conn(self) -> sqlite3.Connection:
+    def _get_conn(self):
+        if self.db and getattr(self.db, "using_mysql", False):
+            return self.db.get_connection()
+        if not self.db_path:
+            raise ValueError("db_path must be provided when MySQL is not active")
         conn = sqlite3.connect(self.db_path)
         conn.row_factory = sqlite3.Row
-        return conn
+        return SQLiteConnectionWrapper(conn)
 
     def _init_tables(self) -> None:
+        if self.db and getattr(self.db, "using_mysql", False):
+            return
         with self._get_conn() as conn:
             conn.execute(
                 """
@@ -150,7 +161,7 @@ class DocumentIndexer:
             conn.execute("DELETE FROM document_index WHERE document_id = ?", (document_id,))
             conn.executemany(
                 """
-                INSERT OR REPLACE INTO document_index (
+                REPLACE INTO document_index (
                     document_id, block_id, original_index, chapter_id, chapter_title,
                     section_id, block_type, text_preview, full_text, word_count,
                     char_count, has_images, has_tables, is_heading, confidence,
@@ -192,13 +203,16 @@ class DocumentIndexer:
                 return {}
 
             stats = dict(row)
+            for k in ("total_blocks", "total_words", "total_chars", "total_pages", "total_images", "total_tables"):
+                if k in stats and stats[k] is not None:
+                    stats[k] = int(stats[k])
 
             # Get counts by block_type
             type_cursor = conn.execute(
                 "SELECT block_type, COUNT(*) as cnt FROM document_index WHERE document_id = ? GROUP BY block_type",
                 (document_id,),
             )
-            stats["types"] = {r["block_type"]: r["cnt"] for r in type_cursor.fetchall()}
+            stats["types"] = {r["block_type"]: int(r["cnt"]) for r in type_cursor.fetchall()}
             return stats
 
     def get_chapters(self, document_id: str) -> List[Dict[str, Any]]:
@@ -214,7 +228,17 @@ class DocumentIndexer:
                 """,
                 (document_id,),
             )
-            return [dict(r) for r in cursor.fetchall()]
+            chapters = []
+            for r in cursor.fetchall():
+                c = dict(r)
+                if "start_idx" in c and c["start_idx"] is not None:
+                    c["start_idx"] = int(c["start_idx"])
+                if "start_page" in c and c["start_page"] is not None:
+                    c["start_page"] = int(c["start_page"])
+                if "block_count" in c and c["block_count"] is not None:
+                    c["block_count"] = int(c["block_count"])
+                chapters.append(c)
+            return chapters
 
     def get_blocks_for_page(self, document_id: str, page_number: int) -> List[Block]:
         """Lazy load blocks for a specific page without loading the entire document."""
