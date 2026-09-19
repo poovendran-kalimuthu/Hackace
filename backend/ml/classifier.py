@@ -569,14 +569,14 @@ class DocumentElementClassifier:
         if patterns.get("is_heading_2_pattern"):
             return BlockType.HEADING_2, 0.97, ["Section x.y numbered heading"]
 
-        if patterns.get("is_heading_1_pattern"):
-            return BlockType.HEADING_1, 0.98, ["Major section numbered heading"]
-
         if patterns.get("is_abstract_pattern"):
             return BlockType.ABSTRACT, 0.98, ["Abstract section pattern"]
 
         if patterns.get("is_keywords_pattern"):
             return BlockType.KEYWORDS, 0.98, ["Keywords pattern"]
+
+        if patterns.get("is_heading_1_pattern"):
+            return BlockType.HEADING_1, 0.98, ["Major section numbered heading"]
 
         # Legacy academic section patterns
         if patterns.get("is_subsection_pattern"):

@@ -530,6 +530,510 @@ def create_app(workspace_root: Optional[str] = None) -> FastAPI:
             },
         )
 
+    # ------------------ Performance Analytics Endpoints ------------------ #
+
+    @app.get("/api/analytics/performance")
+    def get_performance_analytics():
+        """
+        Aggregated performance dashboard analytics across all projects and jobs.
+        Returns KPI totals, per-job throughput, block-type distribution, and ML confidence.
+        """
+        try:
+            projects = project_mgr.list_projects()
+            total_docs = len(projects)
+            total_pages = sum(p.get("page_count", 0) for p in projects)
+            total_words = sum(p.get("word_count", 0) for p in projects)
+            total_chapters = sum(p.get("chapter_count", 0) for p in projects)
+
+            # Pull all jobs
+            with global_db.get_connection() as conn:
+                cursor = conn.execute(
+                    "SELECT * FROM jobs ORDER BY created_at DESC"
+                )
+                all_jobs = [dict(r) for r in cursor.fetchall()]
+
+            completed_jobs = [j for j in all_jobs if j.get("status") == "COMPLETED"]
+            failed_jobs = [j for j in all_jobs if j.get("status") == "FAILED"]
+            total_jobs = len(all_jobs)
+            total_completed = len(completed_jobs)
+
+            # Compute per-job durations from timestamps
+            job_metrics = []
+            for j in all_jobs:
+                try:
+                    created = j.get("created_at", "")
+                    updated = j.get("updated_at", "")
+                    if created and updated:
+                        from datetime import datetime
+                        fmt = "%Y-%m-%dT%H:%M:%S.%f" if "." in created else "%Y-%m-%dT%H:%M:%S"
+                        fmt2 = "%Y-%m-%dT%H:%M:%S.%f" if "." in updated else "%Y-%m-%dT%H:%M:%S"
+                        t_start = datetime.fromisoformat(created.split("+")[0])
+                        t_end = datetime.fromisoformat(updated.split("+")[0])
+                        duration_sec = max(0.0, (t_end - t_start).total_seconds())
+                    else:
+                        duration_sec = 0.0
+                except Exception:
+                    duration_sec = 0.0
+
+                # Match project to get page/word counts
+                proj = next((p for p in projects if p.get("id") == j.get("project_id")), {})
+                pages = proj.get("page_count", 0)
+                words = proj.get("word_count", 0)
+
+                job_metrics.append({
+                    "job_id": j.get("job_id"),
+                    "project_id": j.get("project_id"),
+                    "project_name": proj.get("name", "Unknown"),
+                    "template_id": j.get("template_id", "book"),
+                    "status": j.get("status", "UNKNOWN"),
+                    "progress": j.get("progress", 0.0),
+                    "total_chunks": j.get("total_chunks", 0),
+                    "current_chunk": j.get("current_chunk", 0),
+                    "pages": pages,
+                    "words": words,
+                    "duration_seconds": round(duration_sec, 2),
+                    "pages_per_second": round(pages / duration_sec, 2) if duration_sec > 0 else 0,
+                    "words_per_second": round(words / duration_sec, 1) if duration_sec > 0 else 0,
+                    "created_at": j.get("created_at", ""),
+                    "updated_at": j.get("updated_at", ""),
+                })
+
+            # Average processing time across completed jobs
+            completed_durations = [m["duration_seconds"] for m in job_metrics if m["status"] == "COMPLETED"]
+            avg_duration = round(sum(completed_durations) / len(completed_durations), 2) if completed_durations else 0
+
+            # Block-type distribution across all documents (from global document_index)
+            block_type_stats = {}
+            try:
+                with global_db.get_connection() as conn:
+                    cursor = conn.execute(
+                        """
+                        SELECT block_type,
+                               COUNT(*) as count,
+                               AVG(confidence) as avg_confidence,
+                               SUM(word_count) as total_words
+                        FROM document_index
+                        GROUP BY block_type
+                        ORDER BY count DESC
+                        """
+                    )
+                    for row in cursor.fetchall():
+                        r = dict(row)
+                        block_type_stats[r["block_type"]] = {
+                            "count": r["count"],
+                            "avg_confidence": round(float(r["avg_confidence"] or 0), 3),
+                            "total_words": r["total_words"] or 0,
+                        }
+            except Exception:
+                pass
+
+            # System metrics snapshot
+            system_metrics = executor_pool.get_system_metrics()
+
+            # Recent audit activity
+            recent_events = []
+            try:
+                with global_db.get_connection() as conn:
+                    cursor = conn.execute(
+                        "SELECT event_type, project_id, details_json, created_at FROM audit_logs ORDER BY created_at DESC LIMIT 20"
+                    )
+                    for row in cursor.fetchall():
+                        r = dict(row)
+                        try:
+                            r["details"] = json.loads(r.get("details_json", "{}"))
+                        except Exception:
+                            r["details"] = {}
+                        recent_events.append(r)
+            except Exception:
+                pass
+
+            # ── 5 Key Quality & Performance Metrics ──────────────────────────
+            quality_metrics = {}
+
+            try:
+                # 1. FORMATTING ACCURACY
+                # Weighted avg confidence across all blocks in document_index
+                # Penalise for each FAILED job
+                with global_db.get_connection() as conn:
+                    cur = conn.execute(
+                        "SELECT AVG(confidence) as avg_conf, COUNT(*) as total FROM document_index"
+                    )
+                    row = cur.fetchone()
+                    overall_conf = float(dict(row).get("avg_conf") or 0.0) if row else 0.0
+                    total_idx_blocks = int(dict(row).get("total") or 0) if row else 0
+
+                fail_penalty = (len(failed_jobs) / total_jobs * 0.10) if total_jobs > 0 else 0
+                formatting_accuracy = max(0.0, round((overall_conf - fail_penalty) * 100, 1))
+                quality_metrics["formatting_accuracy"] = {
+                    "score": formatting_accuracy,
+                    "label": "Formatting Accuracy",
+                    "description": "Weighted ML confidence across all classified blocks, adjusted for failed jobs",
+                    "unit": "%",
+                    "detail": {
+                        "avg_block_confidence": round(overall_conf * 100, 1),
+                        "total_blocks_indexed": total_idx_blocks,
+                        "fail_penalty_applied": round(fail_penalty * 100, 1),
+                    },
+                    "rating": "Excellent" if formatting_accuracy >= 92 else "Good" if formatting_accuracy >= 80 else "Fair" if formatting_accuracy >= 65 else "Poor",
+                }
+
+                # 2. STRUCTURE RECOGNITION ACCURACY
+                # % of blocks classified with high confidence (≥ 0.85) across all docs
+                with global_db.get_connection() as conn:
+                    cur = conn.execute(
+                        """
+                        SELECT
+                            SUM(CASE WHEN confidence >= 0.85 THEN 1 ELSE 0 END) as high_conf,
+                            COUNT(*) as total,
+                            COUNT(DISTINCT block_type) as unique_types
+                        FROM document_index
+                        """
+                    )
+                    row = cur.fetchone()
+                    sr = dict(row) if row else {}
+                    high_conf_blocks = int(sr.get("high_conf") or 0)
+                    total_sr_blocks = int(sr.get("total") or 1)
+                    unique_types = int(sr.get("unique_types") or 0)
+
+                structure_recognition = round((high_conf_blocks / max(total_sr_blocks, 1)) * 100, 1)
+                quality_metrics["structure_recognition_accuracy"] = {
+                    "score": structure_recognition,
+                    "label": "Structure Recognition Accuracy",
+                    "description": "% of document blocks classified with ≥85% ML confidence",
+                    "unit": "%",
+                    "detail": {
+                        "high_confidence_blocks": high_conf_blocks,
+                        "total_blocks": total_sr_blocks,
+                        "unique_block_types_detected": unique_types,
+                    },
+                    "rating": "Excellent" if structure_recognition >= 90 else "Good" if structure_recognition >= 75 else "Fair" if structure_recognition >= 60 else "Poor",
+                }
+
+                # 3. CONTENT PRESERVATION
+                # % of completed jobs where content was 100% preserved
+                preserved_count = 0
+                total_validation = 0
+                try:
+                    with global_db.get_connection() as conn:
+                        cur = conn.execute(
+                            "SELECT COUNT(*) as total, SUM(CASE WHEN is_preserved THEN 1 ELSE 0 END) as preserved FROM validation_reports"
+                        )
+                        row = cur.fetchone()
+                        if row:
+                            vr = dict(row)
+                            total_validation = int(vr.get("total") or 0)
+                            preserved_count = int(vr.get("preserved") or 0)
+                except Exception:
+                    pass
+
+                if total_validation > 0:
+                    content_preservation = round((preserved_count / total_validation) * 100, 1)
+                elif total_completed > 0:
+                    # Fallback: use success rate as proxy
+                    content_preservation = round((total_completed / total_jobs) * 100, 1) if total_jobs > 0 else 0.0
+                else:
+                    content_preservation = 0.0
+
+                quality_metrics["content_preservation"] = {
+                    "score": content_preservation,
+                    "label": "Content Preservation",
+                    "description": "% of formatted documents with 100% paragraph/word/image/table fidelity",
+                    "unit": "%",
+                    "detail": {
+                        "validated_jobs": total_validation,
+                        "preserved_jobs": preserved_count,
+                        "unvalidated_completed": max(0, total_completed - total_validation),
+                    },
+                    "rating": "Excellent" if content_preservation >= 98 else "Good" if content_preservation >= 90 else "Fair" if content_preservation >= 75 else "Poor",
+                }
+
+                # 4. PROCESSING EFFICIENCY
+                # Composite: avg throughput (pages/sec & words/sec) normalised
+                completed_metrics = [m for m in job_metrics if m["status"] == "COMPLETED" and m["duration_seconds"] > 0]
+                avg_pages_sec = round(sum(m["pages_per_second"] for m in completed_metrics) / len(completed_metrics), 2) if completed_metrics else 0
+                avg_words_sec = round(sum(m["words_per_second"] for m in completed_metrics) / len(completed_metrics), 1) if completed_metrics else 0
+                avg_chunks = round(sum(m["total_chunks"] for m in completed_metrics) / len(completed_metrics), 1) if completed_metrics else 0
+
+                # Score: normalise pages/sec on scale 0–5 → 0–100%
+                efficiency_score = min(100.0, round(avg_pages_sec * 20, 1)) if avg_pages_sec > 0 else (
+                    min(100.0, round(avg_duration * 2, 1)) if avg_duration > 0 else 0.0
+                )
+                quality_metrics["processing_efficiency"] = {
+                    "score": efficiency_score,
+                    "label": "Processing Efficiency",
+                    "description": "Composite throughput score based on pages/sec and words/sec across completed jobs",
+                    "unit": "%",
+                    "detail": {
+                        "avg_pages_per_second": avg_pages_sec,
+                        "avg_words_per_second": avg_words_sec,
+                        "avg_processing_seconds": avg_duration,
+                        "avg_chunks_per_job": avg_chunks,
+                        "completed_jobs_measured": len(completed_metrics),
+                    },
+                    "rating": "Excellent" if efficiency_score >= 80 else "Good" if efficiency_score >= 50 else "Fair" if efficiency_score >= 25 else "Poor",
+                }
+
+                # 5. SCALABILITY
+                # How linearly processing time scales with document size
+                # Compare small (<50 pages) vs large (≥50 pages) job durations
+                small_jobs = [m for m in completed_metrics if m["pages"] > 0 and m["pages"] < 50]
+                large_jobs = [m for m in completed_metrics if m["pages"] >= 50]
+                avg_small_sec = sum(m["duration_seconds"] for m in small_jobs) / len(small_jobs) if small_jobs else None
+                avg_large_sec = sum(m["duration_seconds"] for m in large_jobs) / len(large_jobs) if large_jobs else None
+
+                # Ideal linear scale factor (large docs should be ~proportionally longer)
+                if avg_small_sec and avg_large_sec and avg_small_sec > 0:
+                    scale_ratio = avg_large_sec / avg_small_sec
+                    # If ratio is close to page ratio → linear (good). Score = proximity to 1.0 on log scale.
+                    scalability_score = min(100.0, round(max(0.0, 100 - abs(scale_ratio - 2.5) * 15), 1))
+                elif len(completed_metrics) >= 2:
+                    # Fallback: consistency — low variance in pages/sec is good
+                    pps_values = [m["pages_per_second"] for m in completed_metrics if m["pages_per_second"] > 0]
+                    if pps_values and len(pps_values) > 1:
+                        import statistics
+                        cv = statistics.stdev(pps_values) / (statistics.mean(pps_values) or 1)
+                        scalability_score = min(100.0, round(max(0.0, 100 - cv * 100), 1))
+                    else:
+                        scalability_score = 75.0
+                else:
+                    scalability_score = 0.0  # Not enough data
+
+                quality_metrics["scalability"] = {
+                    "score": scalability_score,
+                    "label": "Scalability",
+                    "description": "How consistently the pipeline performs as document size grows",
+                    "unit": "%",
+                    "detail": {
+                        "small_doc_jobs": len(small_jobs),
+                        "large_doc_jobs": len(large_jobs),
+                        "avg_small_doc_seconds": round(avg_small_sec, 2) if avg_small_sec else None,
+                        "avg_large_doc_seconds": round(avg_large_sec, 2) if avg_large_sec else None,
+                        "total_completed": total_completed,
+                    },
+                    "rating": "Excellent" if scalability_score >= 85 else "Good" if scalability_score >= 65 else "Fair" if scalability_score >= 40 else "Poor" if completed_metrics else "No Data",
+                }
+
+            except Exception as e:
+                quality_metrics["_error"] = str(e)
+
+            return {
+                "summary": {
+                    "total_documents": total_docs,
+                    "total_pages": total_pages,
+                    "total_words": total_words,
+                    "total_chapters": total_chapters,
+                    "total_jobs": total_jobs,
+                    "completed_jobs": total_completed,
+                    "failed_jobs": len(failed_jobs),
+                    "avg_processing_seconds": avg_duration,
+                    "success_rate": round((total_completed / total_jobs) * 100, 1) if total_jobs > 0 else 0,
+                },
+                "quality_metrics": quality_metrics,
+                "job_metrics": job_metrics,
+                "block_type_stats": block_type_stats,
+                "system_metrics": system_metrics,
+                "recent_audit_events": recent_events,
+                "storage": global_db.get_storage_stats(),
+            }
+
+        except Exception as e:
+            import traceback
+            raise HTTPException(status_code=500, detail=f"Analytics error: {str(e)}")
+
+    @app.get("/api/projects/{project_id}/technical-details")
+    def get_project_technical_details(project_id: str):
+        """
+        Returns rich technical details for a single document/project:
+        block-type breakdown, ML confidence, structural analysis, processing metrics,
+        logo info, and storage info.
+        """
+        p = project_mgr.get_project(project_id)
+        if not p:
+            raise HTTPException(status_code=404, detail="Project not found")
+
+        # Latest job info
+        latest_job = None
+        job_duration_sec = 0.0
+        try:
+            with global_db.get_connection() as conn:
+                cur = conn.execute(
+                    "SELECT * FROM jobs WHERE project_id = ? ORDER BY updated_at DESC LIMIT 1",
+                    (project_id,),
+                )
+                row = cur.fetchone()
+                if row:
+                    latest_job = dict(row)
+                    try:
+                        from datetime import datetime
+                        created = latest_job.get("created_at", "")
+                        updated = latest_job.get("updated_at", "")
+                        if created and updated:
+                            t_start = datetime.fromisoformat(created.split("+")[0])
+                            t_end = datetime.fromisoformat(updated.split("+")[0])
+                            job_duration_sec = max(0.0, (t_end - t_start).total_seconds())
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+
+        # Block-type breakdown from document_index
+        block_type_breakdown = {}
+        total_blocks = 0
+        overall_avg_confidence = 0.0
+        low_confidence_blocks = 0
+        high_confidence_blocks = 0
+        try:
+            with global_db.get_connection() as conn:
+                cursor = conn.execute(
+                    """
+                    SELECT block_type,
+                           COUNT(*) as count,
+                           AVG(confidence) as avg_confidence,
+                           MIN(confidence) as min_confidence,
+                           MAX(confidence) as max_confidence,
+                           SUM(word_count) as total_words,
+                           SUM(has_images) as image_count,
+                           SUM(has_tables) as table_count
+                    FROM document_index
+                    WHERE document_id = ?
+                    GROUP BY block_type
+                    ORDER BY count DESC
+                    """,
+                    (project_id,),
+                )
+                for row in cursor.fetchall():
+                    r = dict(row)
+                    bt = r["block_type"]
+                    block_type_breakdown[bt] = {
+                        "count": r["count"],
+                        "avg_confidence": round(float(r["avg_confidence"] or 1.0), 3),
+                        "min_confidence": round(float(r["min_confidence"] or 1.0), 3),
+                        "max_confidence": round(float(r["max_confidence"] or 1.0), 3),
+                        "total_words": r["total_words"] or 0,
+                        "image_count": r["image_count"] or 0,
+                        "table_count": r["table_count"] or 0,
+                    }
+                    total_blocks += r["count"]
+
+                # Overall confidence stats
+                cursor2 = conn.execute(
+                    """
+                    SELECT AVG(confidence) as avg_conf,
+                           SUM(CASE WHEN confidence < 0.75 THEN 1 ELSE 0 END) as low_conf,
+                           SUM(CASE WHEN confidence >= 0.90 THEN 1 ELSE 0 END) as high_conf
+                    FROM document_index
+                    WHERE document_id = ?
+                    """,
+                    (project_id,),
+                )
+                conf_row = cursor2.fetchone()
+                if conf_row:
+                    cr = dict(conf_row)
+                    overall_avg_confidence = round(float(cr.get("avg_conf") or 1.0), 3)
+                    low_confidence_blocks = int(cr.get("low_conf") or 0)
+                    high_confidence_blocks = int(cr.get("high_conf") or 0)
+        except Exception:
+            pass
+
+        # Validation report
+        validation_report = None
+        if latest_job:
+            try:
+                validation_report = global_db.get_validation_report(latest_job["job_id"])
+            except Exception:
+                pass
+
+        # Logo asset
+        logo_asset = global_db.get_logo_asset(project_id)
+
+        # Storage info
+        root_dir = p.get("root_dir", "")
+        db_path = os.path.join(root_dir, "database", "project.db")
+        source_path = p.get("source_path", "")
+        output_path = p.get("output_path", "")
+
+        def get_file_size(path):
+            try:
+                return os.path.getsize(path) if path and os.path.exists(path) else 0
+            except Exception:
+                return 0
+
+        def format_bytes(b):
+            if b == 0:
+                return "0 B"
+            for unit in ["B", "KB", "MB", "GB"]:
+                if b < 1024:
+                    return f"{b:.1f} {unit}"
+                b /= 1024
+            return f"{b:.1f} TB"
+
+        # Recent corrections for this project
+        corrections_count = 0
+        try:
+            with global_db.get_connection() as conn:
+                cur = conn.execute(
+                    "SELECT COUNT(*) as cnt FROM corrections WHERE project_id = ?",
+                    (project_id,),
+                )
+                row = cur.fetchone()
+                if row:
+                    corrections_count = dict(row).get("cnt", 0)
+        except Exception:
+            pass
+
+        return {
+            "project": {
+                "id": project_id,
+                "name": p.get("name", ""),
+                "description": p.get("description", ""),
+                "status": p.get("status", "DRAFT"),
+                "template_id": p.get("template_id", "book"),
+                "source_filename": p.get("source_filename", ""),
+                "created_at": p.get("created_at", ""),
+                "updated_at": p.get("updated_at", ""),
+            },
+            "document_metrics": {
+                "page_count": p.get("page_count", 0),
+                "word_count": p.get("word_count", 0),
+                "chapter_count": p.get("chapter_count", 0),
+                "total_blocks": total_blocks,
+                "overall_avg_confidence": overall_avg_confidence,
+                "low_confidence_blocks": low_confidence_blocks,
+                "high_confidence_blocks": high_confidence_blocks,
+                "human_corrections": corrections_count,
+            },
+            "block_type_breakdown": block_type_breakdown,
+            "processing": {
+                "job_id": latest_job.get("job_id") if latest_job else None,
+                "status": latest_job.get("status") if latest_job else None,
+                "template_id": latest_job.get("template_id") if latest_job else p.get("template_id"),
+                "total_chunks": latest_job.get("total_chunks", 0) if latest_job else 0,
+                "duration_seconds": round(job_duration_sec, 2),
+                "pages_per_second": round(p.get("page_count", 0) / job_duration_sec, 2) if job_duration_sec > 0 else 0,
+                "words_per_second": round(p.get("word_count", 0) / job_duration_sec, 1) if job_duration_sec > 0 else 0,
+                "started_at": latest_job.get("created_at") if latest_job else None,
+                "completed_at": latest_job.get("updated_at") if latest_job else None,
+                "errors": json.loads(latest_job.get("errors_json", "[]")) if latest_job else [],
+                "warnings": json.loads(latest_job.get("warnings_json", "[]")) if latest_job else [],
+            },
+            "validation_report": validation_report,
+            "logo_asset": {
+                "filename": logo_asset.get("filename") if logo_asset else None,
+                "dimensions": f"{logo_asset.get('width')}×{logo_asset.get('height')} px" if logo_asset else None,
+                "file_size": format_bytes(logo_asset.get("file_size_bytes", 0)) if logo_asset else None,
+                "sha256_short": logo_asset.get("sha256", "")[:12] + "..." if logo_asset else None,
+                "mime_type": logo_asset.get("mime_type") if logo_asset else None,
+                "is_valid": logo_asset.get("is_valid", False) if logo_asset else False,
+            } if logo_asset else None,
+            "storage": {
+                "source_file_size": format_bytes(get_file_size(source_path)),
+                "source_file_size_bytes": get_file_size(source_path),
+                "db_file_size": format_bytes(get_file_size(db_path)),
+                "db_path": db_path if os.path.exists(db_path) else None,
+                "output_exists": os.path.exists(output_path) if output_path else False,
+            },
+        }
+
     # ------------------ Templates Endpoints ------------------ #
 
     @app.get("/api/templates")

@@ -974,3 +974,33 @@ class Database:
             "table_counts": counts,
             "total_records": sum(counts.values()),
         }
+
+    def get_validation_report(self, job_id: str) -> Optional[Dict[str, Any]]:
+        """Returns the content preservation validation report for a given job ID."""
+        try:
+            with self.get_connection() as conn:
+                cur = conn.execute(
+                    "SELECT * FROM validation_reports WHERE job_id = ?", (job_id,)
+                )
+                row = cur.fetchone()
+                if not row:
+                    return None
+                r = dict(row)
+                try:
+                    r["pre_metrics"] = json.loads(r.get("pre_metrics_json", "{}"))
+                except Exception:
+                    r["pre_metrics"] = {}
+                try:
+                    r["post_metrics"] = json.loads(r.get("post_metrics_json", "{}"))
+                except Exception:
+                    r["post_metrics"] = {}
+                try:
+                    r["discrepancies"] = json.loads(r.get("discrepancies_json", "[]"))
+                except Exception:
+                    r["discrepancies"] = []
+                r["is_preserved"] = bool(r.get("is_preserved", 1))
+                return r
+        except Exception as e:
+            logger.warning(f"Failed to fetch validation report for job {job_id}: {e}")
+            return None
+

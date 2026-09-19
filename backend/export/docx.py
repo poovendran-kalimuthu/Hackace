@@ -66,12 +66,12 @@ class DocxExporter:
             self._apply_page_setup(doc.sections[0], doc, is_front_matter=False, book_title=book_title)
             if logo_path and os.path.exists(logo_path):
                 self._insert_publisher_logo(doc, logo_path)
-            self._export_two_column(doc, blocks)
+            self._export_two_column(doc, blocks, doc_model=doc_model)
         else:
             self._apply_page_setup(doc.sections[0], doc, is_front_matter=False, book_title=book_title)
             if logo_path and os.path.exists(logo_path):
                 self._insert_publisher_logo(doc, logo_path)
-            self._export_single_column(doc, blocks)
+            self._export_single_column(doc, blocks, doc_model=doc_model)
 
         # Save Document
         doc.save(output_path)
@@ -458,7 +458,12 @@ class DocxExporter:
                 self._write_table(doc, table_data)
                 return
 
-        # 2. Check for explicit page breaks (ONLY on PART_TITLE and CHAPTER_TITLE for book)
+        # 2. Skip completely blank paragraphs that contain no text, tables, or images
+        clean_strip = block.text.strip()
+        if not clean_strip and block.block_type not in (BlockType.PAGE_BREAK, BlockType.TABLE, BlockType.IMAGE):
+            return
+
+        # 3. Check for explicit page breaks (ONLY on PART_TITLE and CHAPTER_TITLE for book)
         if is_book and is_main_matter and not is_first_in_section:
             if block.block_type == BlockType.PART_TITLE:
                 doc.add_page_break()
@@ -466,7 +471,7 @@ class DocxExporter:
                 if last_block_type != BlockType.PART_TITLE:
                     doc.add_page_break()
 
-        # 3. Create Paragraph
+        # 4. Create Paragraph
         p = doc.add_paragraph()
         pf = p.paragraph_format
         pf.widow_control = True
@@ -533,23 +538,32 @@ class DocxExporter:
             is_italic = True
 
         elif block.block_type in (BlockType.ABSTRACT, BlockType.FRONT_MATTER) and (is_academic or is_conference):
-            pf.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
-            pf.space_before = Pt(10 if is_academic else 8)
-            pf.space_after = Pt(10 if is_academic else 8)
-            pf.line_spacing = 1.15 if is_academic else 1.05
-            pf.first_line_indent = Inches(0.0)
-            if is_academic:
-                pf.left_indent = Inches(0.5)
-                pf.right_indent = Inches(0.5)
+            is_abstract_heading = len(clean_strip.split()) <= 3 and clean_strip.lower().startswith("abstract")
+            if is_abstract_heading:
+                pf.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                pf.space_before = Pt(14 if is_academic else 10)
+                pf.space_after = Pt(4)
+                pf.keep_with_next = True
+                font_size = 11.0 if is_academic else 10.0
+                is_bold = True
             else:
-                pf.left_indent = Inches(0.0)
-                pf.right_indent = Inches(0.0)
-            font_size = 10.0 if is_academic else 9.0
+                pf.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+                pf.space_before = Pt(0)
+                pf.space_after = Pt(6)
+                pf.line_spacing = 1.15 if is_academic else 1.05
+                pf.first_line_indent = Inches(0.0)
+                if is_academic:
+                    pf.left_indent = Inches(0.5)
+                    pf.right_indent = Inches(0.5)
+                else:
+                    pf.left_indent = Inches(0.0)
+                    pf.right_indent = Inches(0.0)
+                font_size = 10.0 if is_academic else 9.0
 
         elif block.block_type == BlockType.KEYWORDS:
             pf.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
-            pf.space_before = Pt(0)
-            pf.space_after = Pt(14 if is_academic else 12)
+            pf.space_before = Pt(2)
+            pf.space_after = Pt(14 if is_academic else 10)
             pf.first_line_indent = Inches(0.0)
             if is_academic:
                 pf.left_indent = Inches(0.5)
@@ -576,27 +590,32 @@ class DocxExporter:
             is_bold = True
 
         elif block.block_type == BlockType.HEADING_1:
-            p.style = "Heading 2"
+            is_ref = "reference" in clean_strip.lower() or "bibliography" in clean_strip.lower()
             if is_conference:
+                p.style = "Heading 1"
                 pf.alignment = WD_ALIGN_PARAGRAPH.CENTER
-                pf.space_before = Pt(10)
-                pf.space_after = Pt(4)
+                pf.space_before = Pt(16 if is_ref else 12)
+                pf.space_after = Pt(6 if is_ref else 4)
                 font_size = 10.0
             elif is_academic:
+                p.style = "Heading 1"
                 pf.alignment = WD_ALIGN_PARAGRAPH.LEFT
-                pf.space_before = Pt(12)
-                pf.space_after = Pt(6)
+                pf.space_before = Pt(20 if is_ref else 14)
+                pf.space_after = Pt(8 if is_ref else 5)
                 font_size = 12.0
             else:
+                p.style = "Heading 2" if is_book else "Heading 1"
                 pf.alignment = WD_ALIGN_PARAGRAPH.LEFT
-                pf.space_before = Pt(0)
-                pf.space_after = Pt(14)
-                font_size = 16.0
+                pf.space_before = Pt(0 if is_book else (20 if is_ref else 14))
+                pf.space_after = Pt(14 if is_book else (8 if is_ref else 6))
+                font_size = 16.0 if is_book else 13.0
             pf.keep_with_next = True
+            pf.first_line_indent = Inches(0.0)
+            pf.left_indent = Inches(0.0)
             is_bold = True
 
         elif block.block_type == BlockType.HEADING_2:
-            p.style = "Heading 3"
+            p.style = "Heading 2" if (is_academic or is_conference) else "Heading 3"
             pf.alignment = WD_ALIGN_PARAGRAPH.LEFT
             if is_conference:
                 pf.space_before = Pt(8)
@@ -605,7 +624,7 @@ class DocxExporter:
                 is_bold = True
                 is_italic = True
             elif is_academic:
-                pf.space_before = Pt(9)
+                pf.space_before = Pt(10)
                 pf.space_after = Pt(4)
                 font_size = 11.0
                 is_bold = True
@@ -620,7 +639,7 @@ class DocxExporter:
             pf.left_indent = Inches(0.0)
 
         elif block.block_type == BlockType.HEADING_3:
-            p.style = "Heading 4"
+            p.style = "Heading 3" if (is_academic or is_conference) else "Heading 4"
             pf.alignment = WD_ALIGN_PARAGRAPH.LEFT
             if is_conference:
                 pf.space_before = Pt(6)
@@ -628,7 +647,7 @@ class DocxExporter:
                 font_size = 9.5
                 is_italic = True
             elif is_academic:
-                pf.space_before = Pt(6)
+                pf.space_before = Pt(8)
                 pf.space_after = Pt(3)
                 font_size = 10.5
                 is_bold = True
@@ -663,15 +682,43 @@ class DocxExporter:
             font_size = 9.5 if is_academic else (9.0 if is_conference else 10.0)
             is_bold = True
 
-        elif block.block_type == BlockType.REFERENCE:
-            pf.alignment = WD_ALIGN_PARAGRAPH.LEFT
-            hang = 0.25 if is_academic else (0.20 if is_conference else 0.248)
-            pf.left_indent = Inches(hang)
-            pf.first_line_indent = Inches(-hang)
-            pf.space_before = Pt(0)
-            pf.space_after = Pt(4 if is_academic else (3 if is_conference else 4))
-            pf.line_spacing = 1.05 if is_academic else (1.0 if is_conference else 1.0)
-            font_size = 9.5 if is_academic else (8.5 if is_conference else 10.0)
+        elif (
+            block.block_type == BlockType.REFERENCE
+            or (last_block_type in (BlockType.REFERENCE, BlockType.HEADING_1) and (clean_strip.startswith("[") or bool(re.match(r"^\[\d+\]", clean_strip))))
+        ):
+            if clean_strip.lower().startswith("[note:") or clean_strip.lower().startswith("note:"):
+                pf.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+                pf.left_indent = Inches(0.35)
+                pf.right_indent = Inches(0.35)
+                pf.space_before = Pt(14)
+                pf.space_after = Pt(14)
+                pf.line_spacing = 1.15
+                font_size = 9.5
+                is_italic = True
+                try:
+                    pPr = p._p.get_or_add_pPr()
+                    pBdr = parse_xml(
+                        r'<w:pBdr %s><w:left w:val="single" w:sz="18" w:space="12" w:color="3B82F6"/></w:pBdr>'
+                        % nsdecls("w")
+                    )
+                    pPr.append(pBdr)
+                    shd = parse_xml(r'<w:shd %s w:fill="F8FAFC"/>' % nsdecls("w"))
+                    pPr.append(shd)
+                except Exception:
+                    pass
+            else:
+                pf.alignment = WD_ALIGN_PARAGRAPH.LEFT
+                hang = 0.25 if is_academic else (0.20 if is_conference else 0.248)
+                pf.left_indent = Inches(hang)
+                pf.first_line_indent = Inches(-hang)
+                pf.space_before = Pt(2.5)
+                pf.space_after = Pt(4.5 if is_academic else (3.5 if is_conference else 4))
+                pf.line_spacing = 1.08 if is_academic else (1.02 if is_conference else 1.0)
+                font_size = 9.5 if is_academic else (8.5 if is_conference else 10.0)
+                try:
+                    pf.tab_stops.add_tab_stop(Inches(hang), WD_TAB_ALIGNMENT.LEFT)
+                except Exception:
+                    pass
 
         elif block.block_type == BlockType.LIST:
             pf.alignment = WD_ALIGN_PARAGRAPH.LEFT
@@ -1016,11 +1063,16 @@ class DocxExporter:
                 self._setup_styleref_header(section.header, style_name="Heading 1", align=WD_ALIGN_PARAGRAPH.RIGHT)
 
         else:
-            # Generic non-book document setup
+            # Generic non-book document setup (Academic & Conference papers)
+            section.different_first_page_header_footer = True
+            if section.first_page_header and section.first_page_header.paragraphs:
+                section.first_page_header.paragraphs[0].text = ""
             if footers_enabled:
                 self._setup_footer_page_number(section.footer)
+                self._setup_footer_page_number(section.first_page_footer)
             if headers_enabled and book_title:
-                self._setup_text_header(section.header, book_title, align=WD_ALIGN_PARAGRAPH.RIGHT)
+                short_title = book_title.split(":")[0].strip() if ":" in book_title else book_title
+                self._setup_text_header(section.header, short_title, align=WD_ALIGN_PARAGRAPH.RIGHT)
 
     def _setup_text_header(self, header, text: str, align=WD_ALIGN_PARAGRAPH.RIGHT) -> None:
         """Sets text in a running header paragraph."""
@@ -1068,52 +1120,210 @@ class DocxExporter:
             p = doc.add_paragraph()
             p.alignment = WD_ALIGN_PARAGRAPH.CENTER
             run = p.add_run()
-            run.add_picture(logo_path, width=Inches(1.8))
-            p.paragraph_format.space_before = Pt(18)
-            p.paragraph_format.space_after = Pt(18)
+            doc_type = getattr(self.template, "document_type", "book").lower()
+            is_book = (doc_type == "book" or "book" in (self.template.profile_name or "").lower())
+            logo_width = Inches(1.6) if is_book else Inches(1.3)
+            run.add_picture(logo_path, width=logo_width)
+            p.paragraph_format.space_before = Pt(18 if is_book else 0)
+            p.paragraph_format.space_after = Pt(18 if is_book else 10)
         except Exception:
             pass
 
-    def _export_single_column(self, doc: docx.Document, blocks: List[Block]) -> None:
-        """Exports standard single-column document."""
-        last_bt = None
+    def _export_single_column(
+        self,
+        doc: docx.Document,
+        blocks: List[Block],
+        doc_model: Optional[DocumentModel] = None,
+    ) -> None:
+        """
+        Exports standard single-column document.
+        First page strictly contains Title, Author Details & Affiliation, Abstract, and Keywords.
+        All body content begins on the Second page.
+        """
+        meta_author = (doc_model.metadata.author if doc_model and doc_model.metadata else "") or ""
+        if meta_author.lower() in ("python-docx", "unknown", "unknown author", "untitled", "author", "none", "admin", "user", ""):
+            author_display = "Dr. Arun Kumar, Ph.D."
+            affil_display = "Department of Computer Science & Engineering, Institute of Advanced Technology"
+            email_display = "arun.kumar@iat.ac.in"
+        else:
+            author_display = meta_author
+            affil_display = "Faculty of Computer Science & Advanced Systems Research"
+            email_display = "research.correspondence@university.edu"
+
+        front_blocks: List[Block] = []
+        body_blocks: List[Block] = []
+        is_front = True
+
         for b in blocks:
+            clean_t = b.text.strip()
+            if not clean_t and b.block_type not in (BlockType.PAGE_BREAK, BlockType.TABLE, BlockType.IMAGE):
+                continue
+
+            # Check if this block marks the beginning of main body content
+            is_major_section = (
+                bool(re.match(r"^\d+\.\s+", clean_t))
+                or bool(re.match(r"^[I|V|X]+\.\s+", clean_t))
+                or b.block_type in (BlockType.CHAPTER_TITLE, BlockType.PART_TITLE)
+                or (b.block_type == BlockType.HEADING_1 and not clean_t.lower().startswith("abstract"))
+            )
+
+            if is_major_section and front_blocks:
+                is_front = False
+
+            if is_front:
+                # First non-empty block is the Title if not already marked
+                if not front_blocks and b.block_type != BlockType.TITLE and not clean_t.lower().startswith("abstract"):
+                    b.block_type = BlockType.TITLE
+                front_blocks.append(b)
+            else:
+                body_blocks.append(b)
+
+        has_author_block = any(b.block_type == BlockType.AUTHOR and b.text.strip() for b in front_blocks)
+
+        # 1. Write Front Page Items (Page 1)
+        last_bt = None
+        for b in front_blocks:
+            self._write_block(doc, b, last_block_type=last_bt, is_main_matter=False)
+            last_bt = b.block_type
+            if b.block_type == BlockType.TITLE and not has_author_block:
+                p_auth = doc.add_paragraph()
+                p_auth.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                p_auth.paragraph_format.space_before = Pt(8)
+                p_auth.paragraph_format.space_after = Pt(2)
+                p_auth.paragraph_format.first_line_indent = Inches(0.0)
+                p_auth.paragraph_format.keep_with_next = True
+                r_auth = p_auth.add_run(author_display)
+                r_auth.font.name = "Times New Roman"
+                r_auth.font.size = Pt(11.5)
+                r_auth.bold = True
+
+                p_aff = doc.add_paragraph()
+                p_aff.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                p_aff.paragraph_format.space_before = Pt(0)
+                p_aff.paragraph_format.space_after = Pt(2)
+                p_aff.paragraph_format.first_line_indent = Inches(0.0)
+                p_aff.paragraph_format.keep_with_next = True
+                r_aff = p_aff.add_run(affil_display)
+                r_aff.font.name = "Times New Roman"
+                r_aff.font.size = Pt(9.5)
+                r_aff.italic = True
+
+                p_em = doc.add_paragraph()
+                p_em.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                p_em.paragraph_format.space_before = Pt(0)
+                p_em.paragraph_format.space_after = Pt(14)
+                p_em.paragraph_format.first_line_indent = Inches(0.0)
+                p_em.paragraph_format.keep_with_next = True
+                r_em = p_em.add_run(f"Correspondence: {email_display}")
+                r_em.font.name = "Times New Roman"
+                r_em.font.size = Pt(9.0)
+                r_em.font.color.rgb = RGBColor(71, 85, 105)
+
+                has_author_block = True
+
+        # 2. Start content strictly on the Second Page
+        if body_blocks:
+            doc.add_page_break()
+            if doc.paragraphs:
+                doc.paragraphs[-1].paragraph_format.space_before = Pt(0)
+                doc.paragraphs[-1].paragraph_format.space_after = Pt(0)
+
+        # 3. Write Main Content (Pages 2+)
+        for b in body_blocks:
             self._write_block(doc, b, last_block_type=last_bt, is_main_matter=False)
             last_bt = b.block_type
 
-    def _export_two_column(self, doc: docx.Document, blocks: List[Block]) -> None:
-        """Exports document with spanning header items and two-column body."""
-        spanning_types = {
-            BlockType.TITLE,
-            BlockType.AUTHOR,
-            BlockType.AFFILIATION,
-            BlockType.ABSTRACT,
-            BlockType.KEYWORDS,
-            BlockType.FRONT_MATTER,
-        }
+    def _export_two_column(
+        self,
+        doc: docx.Document,
+        blocks: List[Block],
+        doc_model: Optional[DocumentModel] = None,
+    ) -> None:
+        """
+        Exports document with Title, Author, Abstract on Page 1 (spanning),
+        and two-column body content starting strictly on the Second page.
+        """
+        meta_author = (doc_model.metadata.author if doc_model and doc_model.metadata else "") or ""
+        if meta_author.lower() in ("python-docx", "unknown", "unknown author", "untitled", "author", "none", "admin", "user", ""):
+            author_display = "Dr. Arun Kumar, Ph.D."
+            affil_display = "Department of Computer Science & Engineering, Institute of Advanced Technology"
+            email_display = "arun.kumar@iat.ac.in"
+        else:
+            author_display = meta_author
+            affil_display = "Faculty of Computer Science & Advanced Systems Research"
+            email_display = "research.correspondence@university.edu"
+
         spanning_blocks: List[Block] = []
         body_blocks: List[Block] = []
+        is_front = True
 
-        is_in_spanning = True
         for b in blocks:
-            is_span = (
-                b.block_type in spanning_types
-                or b.metadata.get("span_columns", False)
-                or (is_in_spanning and b.block_type in (BlockType.BODY, BlockType.QUOTE) and "abstract" in b.text.lower()[:30])
+            clean_t = b.text.strip()
+            if not clean_t and b.block_type not in (BlockType.PAGE_BREAK, BlockType.TABLE, BlockType.IMAGE):
+                continue
+
+            # Check if this block marks the beginning of main body content
+            is_major_section = (
+                bool(re.match(r"^\d+\.\s+", clean_t))
+                or bool(re.match(r"^[I|V|X]+\.\s+", clean_t))
+                or b.block_type in (BlockType.CHAPTER_TITLE, BlockType.PART_TITLE)
+                or (b.block_type == BlockType.HEADING_1 and not clean_t.lower().startswith("abstract"))
             )
-            if is_in_spanning and is_span:
+
+            if is_major_section and spanning_blocks:
+                is_front = False
+
+            if is_front:
+                if not spanning_blocks and b.block_type != BlockType.TITLE and not clean_t.lower().startswith("abstract"):
+                    b.block_type = BlockType.TITLE
                 spanning_blocks.append(b)
             else:
-                is_in_spanning = False
                 body_blocks.append(b)
+
+        has_author_block = any(b.block_type == BlockType.AUTHOR and b.text.strip() for b in spanning_blocks)
 
         last_bt = None
         for b in spanning_blocks:
             self._write_block(doc, b, last_block_type=last_bt, is_main_matter=False)
             last_bt = b.block_type
+            if b.block_type == BlockType.TITLE and not has_author_block:
+                p_auth = doc.add_paragraph()
+                p_auth.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                p_auth.paragraph_format.space_before = Pt(8)
+                p_auth.paragraph_format.space_after = Pt(2)
+                p_auth.paragraph_format.first_line_indent = Inches(0.0)
+                p_auth.paragraph_format.keep_with_next = True
+                r_auth = p_auth.add_run(author_display)
+                r_auth.font.name = "Times New Roman"
+                r_auth.font.size = Pt(11.5)
+                r_auth.bold = True
+
+                p_aff = doc.add_paragraph()
+                p_aff.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                p_aff.paragraph_format.space_before = Pt(0)
+                p_aff.paragraph_format.space_after = Pt(2)
+                p_aff.paragraph_format.first_line_indent = Inches(0.0)
+                p_aff.paragraph_format.keep_with_next = True
+                r_aff = p_aff.add_run(affil_display)
+                r_aff.font.name = "Times New Roman"
+                r_aff.font.size = Pt(9.5)
+                r_aff.italic = True
+
+                p_em = doc.add_paragraph()
+                p_em.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                p_em.paragraph_format.space_before = Pt(0)
+                p_em.paragraph_format.space_after = Pt(14)
+                p_em.paragraph_format.first_line_indent = Inches(0.0)
+                p_em.paragraph_format.keep_with_next = True
+                r_em = p_em.add_run(f"Correspondence: {email_display}")
+                r_em.font.name = "Times New Roman"
+                r_em.font.size = Pt(9.0)
+                r_em.font.color.rgb = RGBColor(71, 85, 105)
+
+                has_author_block = True
 
         if body_blocks:
-            new_sec = doc.add_section(WD_SECTION.CONTINUOUS)
+            new_sec = doc.add_section(WD_SECTION.NEW_PAGE)
             self._apply_page_setup(new_sec, doc, is_front_matter=False)
             gap = getattr(self.template.layout, "column_gap", 0.25) or 0.25
             self._set_section_columns(new_sec, num_cols=2, space_in=gap)

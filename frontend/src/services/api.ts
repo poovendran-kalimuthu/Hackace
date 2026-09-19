@@ -197,4 +197,18 @@ export const api = {
     if (!res.ok) throw new Error('Failed to generate sample');
     return res.json();
   },
+
+  // Performance Analytics Dashboard
+  async getPerformanceAnalytics(): Promise<any> {
+    const res = await fetch(`${API_BASE}/analytics/performance`);
+    if (!res.ok) throw new Error('Failed to load performance analytics');
+    return res.json();
+  },
+
+  // Per-Document Technical Details
+  async getProjectTechnicalDetails(projectId: string): Promise<any> {
+    const res = await fetch(`${API_BASE}/projects/${projectId}/technical-details`);
+    if (!res.ok) throw new Error('Failed to load technical details');
+    return res.json();
+  },
 };

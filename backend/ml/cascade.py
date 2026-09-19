@@ -103,12 +103,21 @@ class ConfidenceCascade:
         ):
             return BlockType.CHAPTER_TITLE, 0.88
 
-        # ── Rule 3: Heading 3 vs Heading 2 (exact numbered depth) ──
+        # ── Rule 3: Heading 3, Heading 2, and Heading 1 ──
+        if patterns.get("is_abstract_pattern"):
+            return BlockType.ABSTRACT, 0.98
+
+        if patterns.get("is_keywords_pattern"):
+            return BlockType.KEYWORDS, 0.98
+
         if patterns.get("is_heading_3_pattern"):
             return BlockType.HEADING_3, 0.96
 
         if patterns.get("is_heading_2_pattern"):
             return BlockType.HEADING_2, 0.96
+
+        if patterns.get("is_heading_1_pattern"):
+            return BlockType.HEADING_1, 0.96
 
         # ── Rule 4: Body first paragraph (no indent after heading) ──
         # After a chapter/section heading, the first paragraph commonly has no indent

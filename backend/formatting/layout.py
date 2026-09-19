@@ -147,6 +147,18 @@ class SmartLayoutEngine:
                     current_page = new_page(is_chapter_opening=False, chapter_name=current_chapter_title)
                     pages.append(current_page)
 
+            # Rule 1b: Academic & Conference Front Matter ends at first HEADING_1 (starts strictly on Page 2)
+            doc_type = getattr(self.template, "document_type", "book").lower()
+            is_academic_or_conf = (
+                doc_type in ("academic_report", "conference_paper")
+                or "academic" in (self.template.profile_name or "").lower()
+                or "conference" in (self.template.profile_name or "").lower()
+            )
+            if is_academic_or_conf and current_page.page_number == 1 and b.block_type == BlockType.HEADING_1:
+                if current_page.blocks:
+                    current_page = new_page(is_chapter_opening=False, chapter_name=b.text)
+                    pages.append(current_page)
+
             # Rule 2: Heading Orphan Guard (Keep-With-Next)
             # If a heading doesn't have room for itself PLUS at least 2 lines of text (approx 36pt), move to next page
             is_heading = b.block_type in (
